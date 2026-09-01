@@ -4333,6 +4333,90 @@ jobs:
 
               return changed
 
+          def ensure_official_sulog_user_arg_ptr(ksu_dir):
+              """Restore a visible `struct user_arg_ptr` where sulog/event.h declares it.
+
+              The susfs4ksu 10_enable_susfs_for_ksu.patch rewrites
+              ksu_sulog_capture_sucompat(root_execve) argv params to
+              `struct user_arg_ptr *argv_user` and expects runtime/ksud.h to
+              provide the struct definition; that ksud.h hunk can FAIL against
+              newer KernelSU (ksud.h lacks ksu_execveat_hook_ksud context), so
+              the type becomes invisible and clang -Wvisibility kills the build.
+              On android13-5.15 the struct is file-local to fs/exec.c, hence we
+              inject the identical GKI shape at the event.h declaration site.
+              Idempotent: skips when a definition or a ksud.h provider already
+              exists.
+              """
+              event_h = ksu_dir / "sulog/event.h"
+              if not event_h.exists():
+                  return False
+
+              event_text = event_h.read_text()
+
+              pointer_re = re.compile(r"\bstruct\s+user_arg_ptr\s*\*\s*argv_user\b")
+              if not pointer_re.search(event_text):
+                  return False
+
+              if "struct user_arg_ptr {" in event_text:
+                  return False
+
+              ksud_h = ksu_dir / "runtime/ksud.h"
+              if ksud_h.exists() and "struct user_arg_ptr {" in ksud_h.read_text():
+                  if '#include "runtime/ksud.h"' in event_text:
+                      return False
+                  lines = event_text.splitlines(keepends=True)
+                  include_indexes = [
+                      i for i, line in enumerate(lines)
+                      if re.match(r"^\s*#\s*include\b", line)
+                  ]
+                  if not include_indexes:
+                      raise SystemExit(f"{event_h} 使用 struct user_arg_ptr，但无 include 区可附加 runtime/ksud.h")
+                  lines.insert(include_indexes[-1] + 1, '#include "runtime/ksud.h"\n')
+                  event_h.write_text("".join(lines))
+                  print(f"已为 {event_h} 补齐 runtime/ksud.h include（携带 struct user_arg_ptr 定义）")
+                  return True
+
+              definition = dedent("""\
+              /* ABK: Official SUSFS sulog declares ksu_sulog_capture_* with
+               * struct user_arg_ptr *argv_user; android13-5.15 defines this
+               * struct file-locally in fs/exec.c and the susfs ksud.h hunk can
+               * fail against newer KernelSU, so provide the identical GKI shape
+               * here (is_compat/ptr layout matches fs/exec.c). */
+              struct user_arg_ptr {
+              #ifdef CONFIG_COMPAT
+                  bool is_compat;
+              #endif
+                  union {
+                      const char __user *const __user *native;
+              #ifdef CONFIG_COMPAT
+                      const compat_uptr_t __user *compat;
+              #endif
+                  } ptr;
+              };
+
+              """)
+              lines = event_text.splitlines(keepends=True)
+              include_indexes = [
+                  i for i, line in enumerate(lines)
+                  if re.match(r"^\s*#\s*include\b", line)
+              ]
+              if not include_indexes:
+                  raise SystemExit(f"{event_h} 使用 struct user_arg_ptr，但无 include 区可注入定义")
+              insert_at = include_indexes[-1] + 1
+              prefix = ""
+              if '#include <linux/compat.h>' not in event_text:
+                  # The injected CONFIG_COMPAT branch references compat_uptr_t;
+                  # arm64 GKI keeps CONFIG_COMPAT=y, so guarantee visibility.
+                  prefix = "#include <linux/compat.h>\n"
+              updated = "".join(lines[:insert_at]) + prefix + definition + "".join(lines[insert_at:])
+              event_h.write_text(updated)
+
+              if "struct user_arg_ptr {" not in event_h.read_text():
+                  raise SystemExit(f"{event_h} 注入 struct user_arg_ptr 定义后自检失败")
+
+              print(f"已为 {event_h} 注入 struct user_arg_ptr 完整定义（GKI 布局）")
+              return True
+
           def ensure_official_app_profile_compat(ksu_dir):
               changed = False
 
@@ -5122,6 +5206,7 @@ jobs:
           changed = ensure_official_susfs_dispatch_compat(ksu_dir) or changed
           changed = ensure_official_runtime_compat(ksu_dir) or changed
           changed = ensure_official_boot_event_compat(ksu_dir) or changed
+          changed = ensure_official_sulog_user_arg_ptr(ksu_dir) or changed
           changed = ensure_official_sulog_argv_compat(ksu_dir) or changed
           changed = ensure_official_app_profile_compat(ksu_dir) or changed
           changed = ensure_official_sucompat_execveat_compat(ksu_dir) or changed
@@ -5160,6 +5245,15 @@ jobs:
           event_h = ksu_dir / "sulog/event.h"
           if event_h.exists():
               event_text = event_h.read_text()
+
+              if re.search(r"\bstruct\s+user_arg_ptr\s*\*\s*argv_user\b", event_text):
+                  defined_in_event = "struct user_arg_ptr {" in event_text
+                  ksud_h = ksu_dir / "runtime/ksud.h"
+                  defined_in_ksud = (
+                      ksud_h.exists() and "struct user_arg_ptr {" in ksud_h.read_text()
+                  )
+                  if not (defined_in_event or defined_in_ksud):
+                      raise SystemExit(f"{event_h} 声明 struct user_arg_ptr *argv_user，但 event.h / ksud.h 均无可见定义")
 
               sucompat_c = ksu_dir / "feature/sucompat.c"
               if official_sulog_argv_is_pointer(event_text, "ksu_sulog_capture_sucompat"):
