@@ -4040,6 +4040,16 @@ jobs:
                   count=1,
               )
               text = text.replace("ksu_handle_sys_read(fd, buf_ptr, count_ptr);", "ksu_handle_sys_read(fd);")
+              # ksu_sys_read() kept its regs-derived locals after the single-arg
+              # rewrite; they are now unused and -Werror,-Wunused-variable rejects
+              # them.  Drop them so the multi-arg wrapper is a pure pass-through.
+              text = re.sub(
+                  r"(?m)^[ \t]*char __user \*\*buf_ptr = \(char __user \*\*\)&PT_REGS_PARM2\(regs\);\n"
+                  r"[ \t]*size_t \*count_ptr = \(size_t \*\)&PT_REGS_PARM3\(regs\);\n",
+                  "",
+                  text,
+                  count=1,
+              )
               text = ensure_include(text, "#include <linux/static_key.h>", "#include <linux/printk.h>\n")
               if "register_kprobe(" in text or "unregister_kprobe(" in text or "struct kprobe" in text:
                   text = ensure_include(text, "#include <linux/kprobes.h>", "#include <linux/input-event-codes.h>\n")
@@ -4333,6 +4343,113 @@ jobs:
 
               return changed
 
+          def ensure_official_sulog_user_arg_ptr(ksu_dir):
+              """Restore a visible `struct user_arg_ptr` (+ MAX_ARG_STRINGS) on the KSU source tree.
+
+              The susfs4ksu 10_enable_susfs_for_ksu.patch:
+                * rewrites ksu_sulog_capture_sucompat(root_execve) argv params
+                  in sulog/event.h and the ksud/execveat helpers to take
+                  `struct user_arg_ptr *` / `struct user_arg_ptr`;
+                * expects kernel/runtime/ksud.h to provide the struct
+                  definition AND `#define MAX_ARG_STRINGS`.
+              Against newer KernelSU (e.g. e6832ed) the ksud.h hunk FAILS, so
+              neither the type nor the macro is defined anywhere on the tree.
+              On android13-5.15 `struct user_arg_ptr` is file-local to
+              fs/exec.c.  We therefore inject the identical GKI shape (with
+              MAX_ARG_STRINGS) into runtime/ksud.h — the exact location the
+              patch intended — so every consumer (sulog/event.h, runtime/
+              ksud_integration.c, ...) sees it.  Idempotent.
+              """
+              pointer_re = re.compile(r"\bstruct\s+user_arg_ptr\b")
+              ksud_h = ksu_dir / "runtime/ksud.h"
+              needs_type = False
+              # Any KSU source that consumes user_arg_ptr after the patch:
+              for candidate in (
+                  ksu_dir / "sulog/event.h",
+                  ksu_dir / "runtime/ksud_integration.c",
+                  ksu_dir / "feature/sucompat.c",
+              ):
+                  if candidate.exists() and pointer_re.search(candidate.read_text()):
+                      needs_type = True
+                      break
+              if not needs_type:
+                  return False
+
+              if ksud_h.exists():
+                  ksud_text = ksud_h.read_text()
+                  if "struct user_arg_ptr {" not in ksud_text:
+                      definition = dedent("""\
+                      #ifndef MAX_ARG_STRINGS
+                      #define MAX_ARG_STRINGS 0x7FFFFFFF
+                      #endif
+                      /* ABK: Official SUSFS rewrites sulog/ksud execveat params to
+                       * struct user_arg_ptr; android13-5.15 defines this struct only
+                       * inside fs/exec.c and the susfs ksud.h hunk can fail against
+                       * newer KernelSU, so provide the identical GKI shape here
+                       * (is_compat/ptr layout matches fs/exec.c). */
+                      struct user_arg_ptr {
+                      #ifdef CONFIG_COMPAT
+                          bool is_compat;
+                      #endif
+                          union {
+                              const char __user *const __user *native;
+                      #ifdef CONFIG_COMPAT
+                              const compat_uptr_t __user *compat;
+                      #endif
+                          } ptr;
+                      };
+
+                      """)
+                      if "#include <linux/compat.h>" not in ksud_text:
+                          # CONFIG_COMPAT (==y on arm64 GKI) references compat_uptr_t.
+                          definition = "#include <linux/compat.h>\n" + definition
+                      # Append at end of the header (after its #endif guard) so the
+                      # guard structure stays intact; unique once.
+                      if definition not in ksud_text:
+                          body = ksud_text.rstrip() + "\n\n" + definition
+                          ksud_h.write_text(body)
+                          print(f"已为 {ksud_h} 注入 MAX_ARG_STRINGS 与 struct user_arg_ptr 完整定义（GKI 布局）")
+                      return True
+
+              # Fallback: no ksud.h — put the definition at the event.h include site.
+              event_h = ksu_dir / "sulog/event.h"
+              if event_h.exists():
+                  event_text = event_h.read_text()
+                  if "struct user_arg_ptr {" not in event_text:
+                      definition = dedent("""\
+                      /* ABK: Official SUSFS sulog declares capture_* with
+                       * struct user_arg_ptr *argv_user; runtime/ksud.h is absent
+                       * so provide the identical GKI shape here. */
+                      struct user_arg_ptr {
+                      #ifdef CONFIG_COMPAT
+                          bool is_compat;
+                      #endif
+                          union {
+                              const char __user *const __user *native;
+                      #ifdef CONFIG_COMPAT
+                              const compat_uptr_t __user *compat;
+                      #endif
+                          } ptr;
+                      };
+
+                      """)
+                      lines = event_text.splitlines(keepends=True)
+                      include_indexes = [
+                          i for i, line in enumerate(lines)
+                          if re.match(r"^\s*#\s*include\b", line)
+                      ]
+                      if not include_indexes:
+                          raise SystemExit(f"{event_h} 使用 struct user_arg_ptr，但无 include 区可注入定义")
+                      insert_at = include_indexes[-1] + 1
+                      prefix = ""
+                      if '#include <linux/compat.h>' not in event_text:
+                          prefix = "#include <linux/compat.h>\n"
+                      updated = "".join(lines[:insert_at]) + prefix + definition + "".join(lines[insert_at:])
+                      event_h.write_text(updated)
+                      print(f"已为 {event_h} 注入 struct user_arg_ptr 完整定义（GKI 布局，无 ksud.h 回退）")
+                      return True
+              return False
+
           def ensure_official_app_profile_compat(ksu_dir):
               changed = False
 
@@ -4591,14 +4708,7 @@ jobs:
                           return 0;
                       }
 
-              #ifdef CONFIG_COMPAT
-                      if (unlikely(envp_user->is_compat))
-                          ret = ksu_adb_root_handle_execve(filename->name, (void ***)&envp_user->ptr.compat);
-                      else
-                          ret = ksu_adb_root_handle_execve(filename->name, (void ***)&envp_user->ptr.native);
-              #else
-                      ret = ksu_adb_root_handle_execve(filename->name, (void ***)&envp_user->ptr.native);
-              #endif
+              __ABK_ADBROOT_REGION__
 
                       if (ret) {
                           pr_err("adb root failed: %d\\n", ret);
@@ -4658,8 +4768,7 @@ jobs:
               int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
                                       void *envp, int *flags)
               {
-                  if (ksu_handle_execveat_ksud(fd, filename_ptr, argv, envp, flags))
-                      return 0;
+                  __ABK_KSUD_BLOCK__
 
                   return ksu_handle_execveat_sucompat(fd, filename_ptr, argv, envp, flags);
               }
@@ -4734,6 +4843,64 @@ jobs:
 
               // sucompat: permitted process can execute 'su' to gain root access.
               """)
+
+              # --- Probe the actual SUSFS adb_root / ksud symbols on this tree ---
+              # The susfs4ksu 10_enable_susfs_for_ksu.patch rewrites adb_root to a
+              # two-arg execveat form (`ksu_adb_root_handle_execveat(const char *,
+              # void ***)`) and declares a new 5-arg `ksu_handle_execveat_ksud` in
+              # runtime/ksud.h.  Against newer KernelSU (e.g. e6832ed) those hunks
+              # can FAIL: adb_root.h keeps the official single-arg
+              # `ksu_adb_root_handle_execve(struct pt_regs *)` and ksud.h keeps no
+              # ksud dispatch declaration at all.  Generate the replacement body
+              # matching the shape actually present, so the generated sucompat.c
+              # never references symbols that do not exist on this tree.
+              adb_root_h = ksu_dir / "feature/adb_root.h"
+              adbroot_has_execveat = (
+                  adb_root_h.exists()
+                  and "ksu_adb_root_handle_execveat(" in adb_root_h.read_text()
+              )
+              if adbroot_has_execveat:
+                  adbroot_region = dedent("""\
+                      #ifdef CONFIG_COMPAT
+                      if (unlikely(envp_user->is_compat))
+                          ret = ksu_adb_root_handle_execveat(filename->name, (void ***)&envp_user->ptr.compat);
+                      else
+                          ret = ksu_adb_root_handle_execveat(filename->name, (void ***)&envp_user->ptr.native);
+                      #else
+                      ret = ksu_adb_root_handle_execveat(filename->name, (void ***)&envp_user->ptr.native);
+                      #endif""")
+              else:
+                  # Only the official single-arg regs form exists (SUSFS adb_root
+                  # hunk failed); this execveat hook has no pt_regs, so SUSFS'
+                  # adb root here is unavailable.  Leave `ret = 0;` (with a note)
+                  # so the generated function stays well-initialized and the build
+                  # never references the missing two-arg symbol; adb root remains
+                  # on the official execve path handled by syscall_event_bridge.c.
+                  adbroot_region = "/* ABK: SUSFS execveat adb_root unavailable on this tree; official single-arg regs form is execve-only. */\n                  ret = 0;"
+
+              ksud_h = ksu_dir / "runtime/ksud.h"
+              ksud_int_c = ksu_dir / "runtime/ksud_integration.c"
+              ksud_has_dispatch = (
+                  ksud_h.exists()
+                  and "ksu_handle_execveat_ksud" in ksud_h.read_text()
+                  and ksud_int_c.exists()
+                  and "ksu_handle_execveat_ksud" in ksud_int_c.read_text()
+              )
+              if ksud_has_dispatch:
+                  ksud_block = dedent("""\
+                  if (ksu_handle_execveat_ksud(fd, filename_ptr, argv, envp, flags))
+                      return 0;
+                  """)
+              else:
+                  # The 5-arg ksud dispatch (SUSFS) is absent; fall through to the
+                  # sucompat handler only, mirroring the official execveat path.
+                  ksud_block = "/* ABK: SUSFS ksud execveat dispatch unavailable; sucompat handler only. */\n"
+
+              replacement = replacement.replace("__ABK_ADBROOT_REGION__", adbroot_region)
+              replacement = replacement.replace("__ABK_KSUD_BLOCK__", ksud_block)
+              if "__ABK_" in replacement or "__ABK__" in replacement:
+                  raise SystemExit(f"{path} 未替换完 all ABK 占位符")
+
               region_pattern = re.compile(
                   r'#define SU_PATH "/system/bin/su"\n#define SH_PATH "/system/bin/sh"\n.*?\n// sucompat: permitted process can execute \'su\' to gain root access\.\n',
                   re.S,
@@ -5122,6 +5289,7 @@ jobs:
           changed = ensure_official_susfs_dispatch_compat(ksu_dir) or changed
           changed = ensure_official_runtime_compat(ksu_dir) or changed
           changed = ensure_official_boot_event_compat(ksu_dir) or changed
+          changed = ensure_official_sulog_user_arg_ptr(ksu_dir) or changed
           changed = ensure_official_sulog_argv_compat(ksu_dir) or changed
           changed = ensure_official_app_profile_compat(ksu_dir) or changed
           changed = ensure_official_sucompat_execveat_compat(ksu_dir) or changed
@@ -5160,6 +5328,15 @@ jobs:
           event_h = ksu_dir / "sulog/event.h"
           if event_h.exists():
               event_text = event_h.read_text()
+
+              if re.search(r"\bstruct\s+user_arg_ptr\s*\*\s*argv_user\b", event_text):
+                  defined_in_event = "struct user_arg_ptr {" in event_text
+                  ksud_h = ksu_dir / "runtime/ksud.h"
+                  defined_in_ksud = (
+                      ksud_h.exists() and "struct user_arg_ptr {" in ksud_h.read_text()
+                  )
+                  if not (defined_in_event or defined_in_ksud):
+                      raise SystemExit(f"{event_h} 声明 struct user_arg_ptr *argv_user，但 event.h / ksud.h 均无可见定义")
 
               sucompat_c = ksu_dir / "feature/sucompat.c"
               if official_sulog_argv_is_pointer(event_text, "ksu_sulog_capture_sucompat"):
