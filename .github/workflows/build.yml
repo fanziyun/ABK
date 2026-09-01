@@ -4675,14 +4675,7 @@ jobs:
                           return 0;
                       }
 
-              #ifdef CONFIG_COMPAT
-                      if (unlikely(envp_user->is_compat))
-                          ret = ksu_adb_root_handle_execve(filename->name, (void ***)&envp_user->ptr.compat);
-                      else
-                          ret = ksu_adb_root_handle_execve(filename->name, (void ***)&envp_user->ptr.native);
-              #else
-                      ret = ksu_adb_root_handle_execve(filename->name, (void ***)&envp_user->ptr.native);
-              #endif
+              __ABK_ADBROOT_REGION__
 
                       if (ret) {
                           pr_err("adb root failed: %d\\n", ret);
@@ -4742,8 +4735,7 @@ jobs:
               int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
                                       void *envp, int *flags)
               {
-                  if (ksu_handle_execveat_ksud(fd, filename_ptr, argv, envp, flags))
-                      return 0;
+                  __ABK_KSUD_BLOCK__
 
                   return ksu_handle_execveat_sucompat(fd, filename_ptr, argv, envp, flags);
               }
@@ -4818,6 +4810,64 @@ jobs:
 
               // sucompat: permitted process can execute 'su' to gain root access.
               """)
+
+              # --- Probe the actual SUSFS adb_root / ksud symbols on this tree ---
+              # The susfs4ksu 10_enable_susfs_for_ksu.patch rewrites adb_root to a
+              # two-arg execveat form (`ksu_adb_root_handle_execveat(const char *,
+              # void ***)`) and declares a new 5-arg `ksu_handle_execveat_ksud` in
+              # runtime/ksud.h.  Against newer KernelSU (e.g. e6832ed) those hunks
+              # can FAIL: adb_root.h keeps the official single-arg
+              # `ksu_adb_root_handle_execve(struct pt_regs *)` and ksud.h keeps no
+              # ksud dispatch declaration at all.  Generate the replacement body
+              # matching the shape actually present, so the generated sucompat.c
+              # never references symbols that do not exist on this tree.
+              adb_root_h = ksu_dir / "feature/adb_root.h"
+              adbroot_has_execveat = (
+                  adb_root_h.exists()
+                  and "ksu_adb_root_handle_execveat(" in adb_root_h.read_text()
+              )
+              if adbroot_has_execveat:
+                  adbroot_region = dedent("""\
+                      #ifdef CONFIG_COMPAT
+                      if (unlikely(envp_user->is_compat))
+                          ret = ksu_adb_root_handle_execveat(filename->name, (void ***)&envp_user->ptr.compat);
+                      else
+                          ret = ksu_adb_root_handle_execveat(filename->name, (void ***)&envp_user->ptr.native);
+                      #else
+                      ret = ksu_adb_root_handle_execveat(filename->name, (void ***)&envp_user->ptr.native);
+                      #endif""")
+              else:
+                  # Only the official single-arg regs form exists (SUSFS adb_root
+                  # hunk failed); this execveat hook has no pt_regs, so SUSFS'
+                  # adb root here is unavailable.  Leave `ret = 0;` (with a note)
+                  # so the generated function stays well-initialized and the build
+                  # never references the missing two-arg symbol; adb root remains
+                  # on the official execve path handled by syscall_event_bridge.c.
+                  adbroot_region = "/* ABK: SUSFS execveat adb_root unavailable on this tree; official single-arg regs form is execve-only. */\n                  ret = 0;"
+
+              ksud_h = ksu_dir / "runtime/ksud.h"
+              ksud_int_c = ksu_dir / "runtime/ksud_integration.c"
+              ksud_has_dispatch = (
+                  ksud_h.exists()
+                  and "ksu_handle_execveat_ksud" in ksud_h.read_text()
+                  and ksud_int_c.exists()
+                  and "ksu_handle_execveat_ksud" in ksud_int_c.read_text()
+              )
+              if ksud_has_dispatch:
+                  ksud_block = dedent("""\
+                  if (ksu_handle_execveat_ksud(fd, filename_ptr, argv, envp, flags))
+                      return 0;
+                  """)
+              else:
+                  # The 5-arg ksud dispatch (SUSFS) is absent; fall through to the
+                  # sucompat handler only, mirroring the official execveat path.
+                  ksud_block = "/* ABK: SUSFS ksud execveat dispatch unavailable; sucompat handler only. */\n"
+
+              replacement = replacement.replace("__ABK_ADBROOT_REGION__", adbroot_region)
+              replacement = replacement.replace("__ABK_KSUD_BLOCK__", ksud_block)
+              if "__ABK_" in replacement or "__ABK__" in replacement:
+                  raise SystemExit(f"{path} 未替换完 all ABK 占位符")
+
               region_pattern = re.compile(
                   r'#define SU_PATH "/system/bin/su"\n#define SH_PATH "/system/bin/sh"\n.*?\n// sucompat: permitted process can execute \'su\' to gain root access\.\n',
                   re.S,
