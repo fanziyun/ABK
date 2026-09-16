@@ -807,7 +807,29 @@ jobs:
             fi
 
             lhs="$(printf '%s' "${block%%;*}" | trim)"
-            stage_raw="$(printf '%s' "${block#*;}" | trim)"
+            # 可选第三字段：ref=<git ref>（分支 / tag / refs/pull/<n>/head / sha）
+            rest="$(printf '%s' "${block#*;}" | trim)"
+            stage_raw="$(printf '%s' "${rest%%;*}" | trim)"
+            extra=""
+            if [[ "$rest" == *";"* ]]; then
+              extra="$(printf '%s' "${rest#*;}" | trim)"
+            fi
+            module_ref=""
+            if [[ -n "$extra" ]]; then
+              case "$extra" in
+                ref=*)
+                  module_ref="$(printf '%s' "${extra#ref=}" | trim)"
+                  ;;
+                *)
+                  echo "::error::自定义外部模块可选字段不支持: $extra（仅支持 ref=<git ref>）"
+                  exit 1
+                  ;;
+              esac
+              if [ -z "$module_ref" ]; then
+                echo "::error::自定义外部模块 ref 为空: $block"
+                exit 1
+              fi
+            fi
             entry_kind="module"
             group_repo_url=""
             child_id=""
@@ -863,9 +885,21 @@ jobs:
             module_dir="$GITHUB_WORKSPACE/custom_external_module_$(printf '%02d' "$index")-$repo_name"
 
             echo "克隆自定义外部模块 #$index ($stage/$entry_kind): $repo_url"
-            git clone --depth 1 "$repo_url" "$module_dir"
+            if [ -n "${module_ref:-}" ]; then
+              echo "  pinned_ref: $module_ref"
+              git init -q "$module_dir"
+              git -C "$module_dir" remote add origin "$repo_url"
+              if ! git -C "$module_dir" fetch --depth 1 origin "$module_ref"; then
+                echo "::error::无法获取自定义外部模块的 ref: $repo_url@$module_ref"
+                exit 1
+              fi
+              git -C "$module_dir" checkout -q --detach FETCH_HEAD
+            else
+              git clone --depth 1 "$repo_url" "$module_dir"
+            fi
             echo "external module checkout #$index:"
             echo "  repo_url: $repo_url"
+            echo "  pinned_ref: ${module_ref:-}"
             echo "  module_dir: $module_dir"
             echo "  head_sha: $(git -C "$module_dir" rev-parse HEAD)"
             echo "  branch: $(git -C "$module_dir" branch --show-current || true)"
