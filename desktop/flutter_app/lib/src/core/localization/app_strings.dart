@@ -437,6 +437,9 @@ class AppStrings {
   String get buildKpmPasswordLabel => isChinese ? 'KPM 密码' : 'KPM password';
   String get buildZramExtraAlgosLabel =>
       isChinese ? 'ZRAM 额外算法' : 'ZRAM extra algos';
+  String get buildSusfsUnsupportedHint => isChinese
+      ? '当前内核线（6.18）上游没有 SUSFS 分支，构建会自动关闭 SUSFS。'
+      : 'This kernel line (6.18) has no upstream SUSFS branch yet, so SUSFS is disabled for the build.';
   String get buildFeatureTitle => isChinese ? '功能开关' : 'Feature flags';
   String get buildAdvancedTitle => isChinese ? '高级选项' : 'Advanced options';
   String get buildCustomModulesTitle =>
@@ -1007,6 +1010,7 @@ class AppStrings {
       'a14' => isChinese ? 'Android 14 / 6.1' : 'Android 14 / 6.1',
       'a15' => isChinese ? 'Android 15 / 6.6' : 'Android 15 / 6.6',
       'a16' => isChinese ? 'Android 16 / 6.12' : 'Android 16 / 6.12',
+      'a17' => isChinese ? 'Android 17 / 6.18' : 'Android 17 / 6.18',
       'custom' => isChinese ? '自定义' : 'Custom',
       _ => target,
     };

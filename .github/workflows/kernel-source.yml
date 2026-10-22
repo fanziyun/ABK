@@ -273,7 +273,7 @@ jobs:
       use_networking: ${{ inputs.use_networking }}
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
-      enable_susfs: ${{ !inputs.cancel_susfs && inputs.kernelsu_variant != 'None' }}
+      enable_susfs: ${{ !inputs.cancel_susfs && inputs.kernelsu_variant != 'None' && inputs.kernel_version != '6.18' }}
       supp_op: false
       zram_full_algo: ${{ inputs.zram_full_algo }}
       zram_extra_algos: ${{ inputs.zram_extra_algos }}

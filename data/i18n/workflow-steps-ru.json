@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "steps": {
     "编译内核": "Сборка ядра",
     "构建信息摘要": "Сводка о сборке",
@@ -67,10 +67,12 @@
     "备份基准 defconfig": "Бэкап базового defconfig",
     "添加一加 8E 处理器支持": "Поддержка процессора OnePlus 8E",
     "修复 6.6 WiFi/蓝牙兼容性（三星 + 小米）": "Фикс совместимости WiFi/BT 6.6 (Samsung + Xiaomi)",
+    "修复 Official SUSFS 6.1-6.18 SELinux 导出": "Фикс экспорта SELinux Official SUSFS 6.1-6.18",
     "修复 Official SUSFS 源码兼容": "Фикс совместимости исходников Official SUSFS",
     "修复 BakaSU SUSFS 源码兼容": "Фикс совместимости исходников BakaSU SUSFS",
     "修复 SukiSU/BakaSU android16-6.12 源码兼容": "Фикс совместимости SukiSU/BakaSU для android16-6.12",
     "修复 SukiSU/BakaSU sulog 兼容": "Фикс совместимости sulog в SukiSU/BakaSU",
+    "修复 SukiSU/BakaSU android16-6.12 / android17-6.18 源码兼容": "Фикс совместимости SukiSU/BakaSU для android16-6.12 / android17-6.18",
     "修复 glibc 2.38 兼容性": "Фикс совместимости с glibc 2.38",
     "应用 Unicode 绕过修复": "Применение Unicode bypass",
     "补齐 SukiSU SUSFS 内联 hook 符号": "Доcбор символов inline-хуков SukiSU SUSFS",

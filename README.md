@@ -38,12 +38,12 @@ ABK 的目标是把手动 fork、启用 Actions、填写 GKI 或 OnePlus/Oplus �
 
 ## 支持范围
 
-- Android 12 / 13 / 14 / 15 / 16 GKI 构建流程，以及 OnePlus/Oplus 机型构建流程。
+- Android 12 / 13 / 14 / 15 / 16 / 17 GKI 构建流程，以及 OnePlus/Oplus 机型构建流程。
 - KernelSU Official、KernelSU Next、SukiSU、BakaSU 构建分支。
 - SUSFS、ZRAM、BBG、KPM、Re-Kernel、lz4kd、BBR、代理优化、Unicode 绕过和一加 8E 支持等可选功能。
 - AnyKernel3 包、kernel img、KernelSU 管理器和 SUSFS 模块产物整理。
 
-实际可用性取决于目标设备、内核版本、上游分支状态和当前补丁兼容性。
+实际可用性取决于目标设备、内核版本、上游分支状态和当前补丁兼容性。`android17/6.18` 目前上游没有 SUSFS 分支（`simonpunk/susfs4ksu` 无 `gki-android17-6.18`），构建会强制关闭 SUSFS。
 
 ## 使用方式
 
@@ -77,7 +77,7 @@ OnePlus 构建支持 `android12/5.10`、`android13/5.15`、`android14/6.1`、`an
 
 虚拟化支持会为内核启用 Linux 容器运行所需的 IPC、PID namespace、SysV IPC、POSIX mqueue 等能力，便于在 Android 上运行完整 Linux 环境、搭建开发环境或运行服务。
 
-**支持范围：** 5.10 / 5.15 / 6.1 / 6.6 / 6.12
+**支持范围：** 5.10 / 5.15 / 6.1 / 6.6 / 6.12 / 6.18
 
 **使用方式：** 在手动触发构建时，选择 `虚拟化支持` 选项：
 
@@ -88,7 +88,7 @@ OnePlus 构建支持 `android12/5.10`、`android13/5.15`、`android14/6.1`、`an
 | `123` | 使用 1_2_3 槽位补丁（备用） |
 | `345` | 使用 3_4_5 槽位补丁（备用） |
 
-> **提示：** 6.12 内核仅有一个补丁，选择任意非关闭选项即可。
+> **提示：** 6.12 / 6.18 内核仅有一个补丁，选择任意非关闭选项即可。
 
 **如果构建失败或刷入后 bootloop：** 可尝试切换到其他槽位补丁（如 678 → 123 或 345），不同内核子版本可能适用不同的补丁。
 - 刷写内核属于高风险操作，可能导致无法开机、数据损坏或需要恢复出厂 boot 镜像。
@@ -117,7 +117,7 @@ sukisu=
 
 ## KSU 分支 `Latest(最新)`（仅 GKI）
 
-适用于所有 GKI 的 `workflow_dispatch` 工作流（[`kernel-custom.yml`](.github/workflows/kernel-custom.yml)、[`kernel-a12-5-10.yml`](.github/workflows/kernel-a12-5-10.yml)、[`kernel-a13-5-15.yml`](.github/workflows/kernel-a13-5-15.yml)、[`kernel-a14-6-1.yml`](.github/workflows/kernel-a14-6-1.yml)、[`kernel-a15-6-6.yml`](.github/workflows/kernel-a15-6-6.yml)、[`kernel-a16-6-12.yml`](.github/workflows/kernel-a16-6-12.yml) 及 [`kernel-full-feature-matrix.yml`](.github/workflows/kernel-full-feature-matrix.yml)）。App 派发的是 [`kernel-custom.yml`](.github/workflows/kernel-custom.yml)；在 GitHub 网页上也可对固定版本工作流手动选择 **Latest(最新)**。
+适用于所有 GKI 的 `workflow_dispatch` 工作流（[`kernel-custom.yml`](.github/workflows/kernel-custom.yml)、[`kernel-a12-5-10.yml`](.github/workflows/kernel-a12-5-10.yml)、[`kernel-a13-5-15.yml`](.github/workflows/kernel-a13-5-15.yml)、[`kernel-a14-6-1.yml`](.github/workflows/kernel-a14-6-1.yml)、[`kernel-a15-6-6.yml`](.github/workflows/kernel-a15-6-6.yml)、[`kernel-a16-6-12.yml`](.github/workflows/kernel-a16-6-12.yml)、[`kernel-a17-6-18.yml`](.github/workflows/kernel-a17-6-18.yml) 及 [`kernel-full-feature-matrix.yml`](.github/workflows/kernel-full-feature-matrix.yml)）。App 派发的是 [`kernel-custom.yml`](.github/workflows/kernel-custom.yml)；在 GitHub 网页上也可对固定版本工作流手动选择 **Latest(最新)**。
 
 在 GitHub Actions 与 App 的 GKI 构建界面中，**Latest(最新)** 位于 **Dev** 与 **Custom** 之间，由 [`resolve-ksu-ref.sh`](.github/scripts/resolve-ksu-ref.sh) 在运行时解析上游 KernelSU 来源：
 

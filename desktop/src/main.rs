@@ -3503,7 +3503,7 @@ fn resolve_user_home_dir() -> Option<PathBuf> {
 
 fn build_gki_cli_args(request: &BuildGkiRequest) -> Result<Vec<String>, ApiError> {
     let target = request.target.trim().to_lowercase();
-    let valid_targets = ["a12", "a13", "a14", "a15", "a16", "custom"];
+    let valid_targets = ["a12", "a13", "a14", "a15", "a16", "a17", "custom"];
     if !valid_targets.contains(&target.as_str()) {
         return Err(ApiError::bad_request("unsupported GKI target"));
     }

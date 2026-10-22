@@ -1805,8 +1805,20 @@ fun BuildScreen(
                         vm.updateBuildConfig(config.copy(onePlusUseUnicodeBypass = it))
                     }
                 } else {
-                    SwitchRow(stringResource(R.string.build_enable_susfs), !config.cancelSusfs, enabled = !noRootScheme) {
+                    val gkiSusfsSupported = KernelSupport.susfsSupported(config.kernelVersion)
+                    SwitchRow(
+                        stringResource(R.string.build_enable_susfs),
+                        !config.cancelSusfs && gkiSusfsSupported,
+                        enabled = !noRootScheme && gkiSusfsSupported
+                    ) {
                         vm.updateBuildConfig(KernelSupport.normalize(config.copy(cancelSusfs = !it)))
+                    }
+                    if (!gkiSusfsSupported) {
+                        Text(
+                            text = stringResource(R.string.build_gki_susfs_unsupported),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     SwitchRow(stringResource(R.string.build_enable_zram), config.useZram) {
                         vm.updateBuildConfig(config.copy(useZram = it))

@@ -118,7 +118,63 @@ class KernelSupportTest {
     @Test
     fun virtualizationOptionsDependOnKernelLine() {
         assertEquals(listOf("off", "on"), KernelSupport.virtualizationSupportOptions("6.12"))
+        assertEquals(listOf("off", "on"), KernelSupport.virtualizationSupportOptions("6.18"))
         assertEquals(listOf("off", "678", "123", "345"), KernelSupport.virtualizationSupportOptions("6.1"))
+    }
+
+    @Test
+    fun android17LineCoversSixEighteenBuildMatrix() {
+        assertEquals("android17", KernelSupport.androidForKernel("6.18"))
+        assertEquals("6.18", KernelSupport.kernelForAndroid("android17"))
+        assertTrue(KernelSupport.lines.any { it.androidVersion == "android17" && it.kernelVersion == "6.18" })
+        assertEquals(listOf("20", "21", "32", "X"), KernelSupport.subLevelOptions("android17", "6.18"))
+        assertEquals(listOf("2026-04"), KernelSupport.patchLevelOptions("android17", "6.18", "20"))
+        assertEquals(listOf("2026-06"), KernelSupport.patchLevelOptions("android17", "6.18", "21"))
+        assertEquals(listOf("2026-09"), KernelSupport.patchLevelOptions("android17", "6.18", "32"))
+        assertEquals(listOf("lts"), KernelSupport.patchLevelOptions("android17", "6.18", "X"))
+    }
+
+    @Test
+    fun recommendedFromKernelDetectsAndroid17Line() {
+        val config = KernelSupport.recommendedFromKernel(
+            "Linux version 6.18.21-android17-5-gabcdef SMP PREEMPT 2026-06"
+        )
+
+        assertEquals("android17", config.androidVersion)
+        assertEquals("6.18", config.kernelVersion)
+        assertEquals("21", config.subLevel)
+        assertEquals("2026-06", config.osPatchLevel)
+    }
+
+    @Test
+    fun normalizeCoercesVirtualizationAndForcesSusfsOffForSixEighteen() {
+        val normalized = KernelSupport.normalize(
+            KernelBuildConfig(
+                androidVersion = "android17",
+                kernelVersion = "6.18",
+                subLevel = "999",
+                osPatchLevel = "2099-01",
+                kernelsuVariant = KSU_VARIANT_BAKASU,
+                cancelSusfs = false,
+                virtualizationSupport = "678"
+            )
+        )
+
+        assertEquals("android17", normalized.androidVersion)
+        assertEquals("6.18", normalized.kernelVersion)
+        assertEquals("32", normalized.subLevel)
+        assertEquals("2026-09", normalized.osPatchLevel)
+        assertEquals("on", normalized.virtualizationSupport)
+        assertTrue(normalized.cancelSusfs)
+    }
+
+    @Test
+    fun susfsSupportedFollowsUpstreamBranchAvailability() {
+        assertTrue(KernelSupport.susfsSupported("6.12"))
+        assertTrue(KernelSupport.susfsSupported("6.6"))
+        assertFalse(KernelSupport.susfsSupported("6.18"))
+        assertFalse(KernelSupport.onePlusLz4kdSupported("6.12"))
+        assertFalse(KernelSupport.onePlusLz4kdSupported("6.18"))
     }
 
     @Test

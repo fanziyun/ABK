@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "steps": {
     "编译内核": "Compile kernel",
     "构建信息摘要": "Build info summary",
@@ -67,10 +67,12 @@
     "备份基准 defconfig": "Backup baseline defconfig",
     "添加一加 8E 处理器支持": "Add OnePlus 8E SoC support",
     "修复 6.6 WiFi/蓝牙兼容性（三星 + 小米）": "Fix 6.6 WiFi/BT compatibility (Samsung + Xiaomi)",
+    "修复 Official SUSFS 6.1-6.18 SELinux 导出": "Fix Official SUSFS 6.1-6.18 SELinux exports",
     "修复 Official SUSFS 源码兼容": "Fix Official SUSFS source compatibility",
     "修复 BakaSU SUSFS 源码兼容": "Fix BakaSU SUSFS source compatibility",
     "修复 SukiSU/BakaSU android16-6.12 源码兼容": "Fix SukiSU/BakaSU android16-6.12 compatibility",
     "修复 SukiSU/BakaSU sulog 兼容": "Fix SukiSU/BakaSU sulog compatibility",
+    "修复 SukiSU/BakaSU android16-6.12 / android17-6.18 源码兼容": "Fix SukiSU/BakaSU android16-6.12 / android17-6.18 compatibility",
     "修复 glibc 2.38 兼容性": "Fix glibc 2.38 compatibility",
     "应用 Unicode 绕过修复": "Apply Unicode bypass fix",
     "补齐 SukiSU SUSFS 内联 hook 符号": "Complete SukiSU SUSFS inline-hook symbols",

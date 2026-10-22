@@ -212,7 +212,7 @@ abk build --source-repo https://github.com/example/kernel.git \
 
 ```bash
 abk build --matrix a15                   # 单个目标
-abk build --matrix both                  # 全版本 (a12~a16)
+abk build --matrix both                  # 全版本 (a12~a17)
 ```
 
 #### 全量工作流 / Full Workflows
@@ -374,8 +374,8 @@ abk list
 | 选项 / Option | 描述 / Description |
 |------|------|
 | (默认) | 自定义构建 - 需 `--sub-level` 和 `--os-patch-level` |
-| `--matrix a12~a16` | 矩阵构建 - 单个目标所有子版本 |
-| `--matrix both` | 全版本矩阵 - 同时触发 a12~a16 |
+| `--matrix a12~a17` | 矩阵构建 - 单个目标所有子版本 |
+| `--matrix both` | 全版本矩阵 - 同时触发 a12~a17 |
 | `--matrix full` | 全属性内核构建矩阵 |
 | `--matrix all-managers` | 全管理器全矩阵编译 |
 | `--oneplus` | OnePlus/Oplus 设备 |
@@ -386,15 +386,19 @@ abk list
 
 | 选项 / Option | 说明 / Description |
 |------|------|
-| `--android-version` | android12/13/14/15/16 (默认: android12) |
-| `--kernel-version` | 5.10/5.15/6.1/6.6/6.12 (默认: 5.10) |
+| `--android-version` | android12/13/14/15/16/17 (默认: android12) |
+| `--kernel-version` | 5.10/5.15/6.1/6.6/6.12/6.18 (默认: 5.10) |
 | `--sub-level` | 子版本号，如 66, 162 |
 | `--os-patch-level` | 安全补丁级别，如 2022-01, 2026-03 |
 | `--revision` | 修订版本，如 r11；仅 custom 5.10、full、all-managers 接收 |
 
 自定义 LTS 构建使用固定组合 `--sub-level X --os-patch-level lts`；两项必须
 同时指定。Android 与内核版本也必须使用上游支持的配对（android12/5.10 至
-android16/6.12）。
+android17/6.18）。
+
+android17/6.18 的 SUSFS 上游（simonpunk/susfs4ksu）尚无 gki-android17-6.18
+分支，因此该工作流会强制关闭 SUSFS。CLI 会自动把 android17/6.18 的 SUSFS
+关闭并给出警告（与 CI 入口校验一致），即使显式传入 `--susfs` 也不会启用。
 
 为避免自由文本进入现有 Actions Shell，CLI 会在本地拒绝不安全参数：
 除固定的 `X`/`lts` 组合外，`--sub-level` 必须为数字，补丁级别必须为
@@ -409,7 +413,7 @@ android16/6.12）。
 | `--bbg` / `--no-bbg` | 禁用 | BBG 防格机 |
 | `--ddk` / `--no-ddk` | 禁用 | DDK 防格机 LSM |
 | `--kpm` / `--no-kpm` | 禁用 | KPM 功能 |
-| `--susfs` / `--no-susfs` | 启用 | SUSFS |
+| `--susfs` / `--no-susfs` | 启用 | SUSFS（android17/6.18 不支持，会自动关闭并警告） |
 | `--rekernel` / `--no-rekernel` | 禁用 | Re-Kernel 驱动 |
 | `--oneplus-8e` / `--no-oneplus-8e` | 禁用 | 一加 8E 支持 |
 | `--ntsync` | 禁用 | NTsync |
@@ -441,7 +445,7 @@ android16/6.12）。
 | 选项 / Option | 描述 / Description |
 |------|------|
 | `off` | 关闭（默认） |
-| `on` | 启用（旧内核映射到 678，6.12 映射到 on） |
+| `on` | 启用（旧内核映射到 678，6.12/6.18 映射到 on） |
 | `678` | 6_7_8 槽位补丁（推荐） |
 | `123` | 1_2_3 槽位补丁（备用） |
 | `345` | 3_4_5 槽位补丁（备用） |

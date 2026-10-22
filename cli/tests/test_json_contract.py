@@ -875,6 +875,56 @@ class JsonContractTests(unittest.TestCase):
         self.assertNotIn("contract-secret", json.dumps(payload))
         self.assertEqual("", stderr)
 
+    def test_a17_dry_run_matches_the_android16_contract_shape(self):
+        argv = [
+            "abk", "--json", "build", "--dry-run", "--matrix", "a17",
+            "--ksu", "SukiSU", "--force",
+        ]
+        exit_code, payload, stderr = self._run_main(argv)
+
+        self.assertEqual(0, exit_code)
+        dispatch = payload["dispatches"][0]
+        self.assertEqual("kernel-a17-6-18.yml", dispatch["workflowFile"])
+        self.assertEqual("内核构建 - Android 17 (6.18)", dispatch["workflowName"])
+        self.assertEqual("a17", dispatch["target"])
+        self.assertEqual("SukiSU", dispatch["ksuVariant"])
+        self.assertIn("kernel-a17-6-18.yml", abk.WORKFLOW_RUNTIME_NAMES)
+        self.assertEqual(
+            "内核构建 - Android 17 (6.18)",
+            abk.WORKFLOW_RUNTIME_NAMES["kernel-a17-6-18.yml"],
+        )
+        self.assertEqual("", stderr)
+
+    def test_a17_dry_run_reports_susfs_auto_disabled_warning(self):
+        argv = [
+            "abk", "--json", "build", "--dry-run", "--matrix", "a17",
+            "--ksu", "SukiSU", "--susfs", "--force",
+        ]
+        exit_code, payload, stderr = self._run_main(argv)
+
+        self.assertEqual(0, exit_code)
+        dispatch = payload["dispatches"][0]
+        self.assertEqual("true", dispatch["inputs"]["cancel_susfs"])
+        self.assertEqual(1, len(payload["warnings"]))
+        self.assertIn("SUSFS", payload["warnings"][0])
+        self.assertEqual("", stderr)
+
+    def test_custom_android17_618_dry_run_keeps_the_supported_pair(self):
+        argv = [
+            "abk", "--json", "build", "--dry-run",
+            "--android-version", "android17", "--kernel-version", "6.18",
+            "--sub-level", "20", "--os-patch-level", "2026-04",
+            "--ksu", "SukiSU", "--force",
+        ]
+        exit_code, payload, stderr = self._run_main(argv)
+
+        self.assertEqual(0, exit_code)
+        dispatch = payload["dispatches"][0]
+        self.assertEqual("kernel-custom.yml", dispatch["workflowFile"])
+        self.assertEqual("android17", dispatch["inputs"]["android_version"])
+        self.assertEqual("6.18", dispatch["inputs"]["kernel_version"])
+        self.assertEqual("", stderr)
+
     def test_single_character_password_does_not_corrupt_structured_fields(self):
         argv = [
             "abk", "--json", "build", "--dry-run", "--matrix", "a14",
@@ -961,11 +1011,11 @@ class JsonContractTests(unittest.TestCase):
 
         self.assertEqual(1, exit_code)
         self.assertFalse(payload["ok"])
-        self.assertEqual(5, payload["total"])
-        self.assertEqual(5, len(payload["dispatches"]))
+        self.assertEqual(6, payload["total"])
+        self.assertEqual(6, len(payload["dispatches"]))
         self.assertEqual(1, sum(item["status"] == "failed" for item in payload["dispatches"]))
         self.assertIsNone(payload["run"])
-        self.assertEqual(4, len(payload["runs"]))
+        self.assertEqual(5, len(payload["runs"]))
         self.assertNotIn("contract-secret", json.dumps(payload))
         self.assertNotIn("contract-secret", stderr)
 

@@ -9,6 +9,7 @@ export const DATA_FILES = [
   { android: 'android14', kernel: '6.1',  label: 'android14 / 6.1',  deprecatedCutoff: '2024-09' },
   { android: 'android15', kernel: '6.6',  label: 'android15 / 6.6',  deprecatedCutoff: '' },
   { android: 'android16', kernel: '6.12', label: 'android16 / 6.12', deprecatedCutoff: '' },
+  { android: 'android17', kernel: '6.18', label: 'android17 / 6.18', deprecatedCutoff: '' },
 ];
 
 // 运行时缓存键（每次加载页面生成新的，防止缓存）

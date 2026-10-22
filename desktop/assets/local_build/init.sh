@@ -41,10 +41,10 @@ TEMPLATE_ROOT="${ABK_LOCAL_BUILD_TEMPLATE_ROOT:-}"
 
 usage() {
     cat <<'EOF'
-Usage: ./init.sh --android <android14|android15|...> --kernel <6.1|6.6|6.12> --branch-month <YYYY-MM> [--force] [--skip-deps]
+Usage: ./init.sh --android <android14|android15|...> --kernel <6.1|6.6|6.12|6.18> --branch-month <YYYY-MM> [--force] [--skip-deps]
 
   --android       Android ACK line, for example: android14, android15.
-  --kernel        Kernel version line, for example: 6.1, 6.6, 6.12.
+  --kernel        Kernel version line, for example: 6.1, 6.6, 6.12, 6.18.
   --branch-month  Patch month appended to the ACK branch, for example: 2025-05.
   --force         Recreate .local-build workspace from scratch.
   --skip-deps     Do not clone or update dependency repositories.
@@ -170,6 +170,10 @@ manifest_branch_for() {
 
 susfs_branch_for() {
     printf 'gki-%s-%s\n' "$1" "$2"
+}
+
+susfs_supported_for() {
+    [[ "$2" != "6.18" ]]
 }
 
 read_manifest_common_revision() {
@@ -525,7 +529,11 @@ prepare_dependencies() {
     clone_or_update "$KERNEL_PATCHES_REPO_URL" "$KERNEL_PATCHES_SOURCE"
     clone_or_update "$SUKISU_PATCHES_REPO_URL" "$SUKISU_PATCHES_SOURCE"
     clone_or_update "$ACTION_BUILD_REPO_URL" "$ACTION_BUILD_SOURCE"
-    clone_or_update "$SUSFS_REPO_URL" "$SUSFS_SOURCE" "$susfs_branch"
+    if susfs_supported_for "$SELECTED_ANDROID_VERSION" "$SELECTED_KERNEL_VERSION"; then
+        clone_or_update "$SUSFS_REPO_URL" "$SUSFS_SOURCE" "$susfs_branch"
+    else
+        log_warn "SUSFS upstream has no gki-${SELECTED_ANDROID_VERSION}-${SELECTED_KERNEL_VERSION} branch; skipping SUSFS source clone"
+    fi
     clone_or_update "$GCC_REPO_URL" "$GCC_SOURCE"
     clone_or_update "$VIRTUALIZATION_REPO_URL" "$VIRTUALIZATION_SOURCE"
 }
@@ -574,7 +582,9 @@ main() {
         require_dir "$KERNEL_PATCHES_SOURCE"
         require_dir "$SUKISU_PATCHES_SOURCE"
         require_dir "$ACTION_BUILD_SOURCE"
-        require_dir "$SUSFS_SOURCE"
+        if susfs_supported_for "$SELECTED_ANDROID_VERSION" "$SELECTED_KERNEL_VERSION"; then
+            require_dir "$SUSFS_SOURCE"
+        fi
         require_dir "$GCC_SOURCE"
         require_dir "$VIRTUALIZATION_SOURCE"
     fi

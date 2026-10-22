@@ -2198,6 +2198,7 @@ fn supported_kernel_lines(script_root: &Path) -> Vec<SupportedKernelLine> {
         ("android14", "6.1"),
         ("android15", "6.6"),
         ("android16", "6.12"),
+        ("android17", "6.18"),
     ]
     .into_iter()
     .map(|(android_version, kernel_version)| {
@@ -2332,6 +2333,9 @@ fn normalize_build_request(
             .as_ref()
             .and_then(|materialized| materialized.os_patch_level.clone())
             .or_else(|| Some(source_instance.branch_month.clone()));
+    }
+    if source_instance.kernel_version == "6.18" {
+        build_request.susfs = false;
     }
     if source_instance.kernel_version != "5.10" {
         build_request.revision = Some(String::new());

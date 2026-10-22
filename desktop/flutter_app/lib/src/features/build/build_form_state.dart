@@ -186,6 +186,9 @@ class BuildFormState {
       ksuVariant: normalizedVariant,
       ksuBranch: normalizedBranch,
     );
+    final susfsSupported = DesktopKernelSupport.isSusfsSupported(
+      normalizedKernel,
+    );
     final normalizedVirt = DesktopKernelSupport.normalizeVirtualizationSupport(
       normalizedKernel,
       virt,
@@ -204,7 +207,7 @@ class BuildFormState {
       ksuBranch: normalizedBranch,
       customRef: normalizedBranch == 'Custom' ? customRef.trim() : '',
       kpm: kpmSupported && kpm,
-      susfs: normalizedVariant == 'None' ? false : susfs,
+      susfs: susfsSupported && normalizedVariant != 'None' ? susfs : false,
       virt: normalizedVirt,
       kpmPassword: kpmSupported ? kpmPassword : '',
       zramExtraAlgos: zramFullAlgo ? '' : zramExtraAlgos,

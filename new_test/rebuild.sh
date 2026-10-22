@@ -139,6 +139,9 @@ source_env() {
     : "${ABK_MANAGER_PACKAGE:=com.abk.kernel}"
     : "${ABK_MANAGER_CERT_SIZE:=1407}"
     : "${ABK_MANAGER_CERT_SHA256:=34e5e843952277759603cd0f949770b24c868530d80d7baeff08776a7e132b16}"
+    if [[ "$KERNEL_VERSION" == "6.18" ]]; then
+        ENABLE_SUSFS=false
+    fi
 }
 
 setup_logging() {
@@ -1226,7 +1229,8 @@ apply_virtualization_support() {
 
 apply_zram_stack() {
     bool_is_true "$USE_ZRAM" || return 0
-    [[ "$KERNEL_VERSION" != "6.12" ]] || log_error "ZRAM enhancement is disabled for kernel 6.12"
+    [[ "$KERNEL_VERSION" != "6.12" && "$KERNEL_VERSION" != "6.18" ]] || \
+        log_error "ZRAM enhancement is disabled for kernel $KERNEL_VERSION"
 
     log_info "applying ZRAM patch stack"
     (
@@ -1532,7 +1536,7 @@ run_kernel_build() {
             if [[ -s "$FRAG_PATH" ]]; then
                 frag_flag="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
             fi
-            if [[ "$KERNEL_VERSION" == "6.12" ]]; then
+            if [[ "$KERNEL_VERSION" == "6.12" || "$KERNEL_VERSION" == "6.18" ]]; then
                 lto_flag="--lto=none"
             fi
             bazel_help="$(tools/bazel help build 2>&1 || true)"

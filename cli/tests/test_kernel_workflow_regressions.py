@@ -185,10 +185,39 @@ class KernelWorkflowRegressionTests(unittest.TestCase):
         )
         self.assertIn("#endif // #ifdef CONFIG_KSU_SUSFS", block)
 
-    def test_android16_uses_native_ntsync_source(self):
+    def test_android16_and_android17_use_native_ntsync_source(self):
         block = self._step_run_block("应用 NTsync 补丁")
-        self.assertIn('if [[ "$ABK_ANDROID_VERSION" != "android16"', block)
-        self.assertIn('NTsync 基础源码已由 android16-6.12 内核提供', block)
+        for android, kernel in (("android16", "6.12"), ("android17", "6.18")):
+            with self.subTest(line=f"{android}-{kernel}"):
+                self.assertIn(
+                    f'[[ "$ABK_ANDROID_VERSION" != "{android}" '
+                    f'|| "$ABK_KERNEL_VERSION" != "{kernel}" ]]',
+                    block,
+                )
+        self.assertIn(
+            'NTsync 基础源码已由 ${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION} 内核提供',
+            block,
+        )
+        self.assertNotIn('NTsync 基础源码已由 android16-6.12 内核提供', block)
+
+    def test_android17_workflow_mirrors_android16_build_matrix(self):
+        workflow_path = ROOT / ".github" / "workflows" / "kernel-a17-6-18.yml"
+        self.assertTrue(workflow_path.is_file(), "kernel-a17-6-18.yml is missing")
+        workflow = workflow_path.read_text(encoding="utf-8")
+
+        self.assertIn("name: 内核构建 - Android 17 (6.18)", workflow)
+        self.assertIn('android_version: "android17"', workflow)
+        self.assertIn('kernel_version: "6.18"', workflow)
+        for sub_level, os_patch_level in (
+            ("20", "2026-04"),
+            ("21", "2026-06"),
+            ("32", "2026-09"),
+        ):
+            with self.subTest(sub_level=sub_level):
+                self.assertIn(f'sub_level: "{sub_level}"', workflow)
+                self.assertIn(f'os_patch_level: "{os_patch_level}"', workflow)
+        self.assertIn("enable_susfs: false", workflow)
+        self.assertNotIn("enable_susfs: ${{ !inputs.cancel_susfs }}", workflow)
 
     def test_android14_builtin_ntsync_does_not_require_symbol_export(self):
         block = self._step_run_block("应用 NTsync 补丁")

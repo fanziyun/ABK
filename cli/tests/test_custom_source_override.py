@@ -36,6 +36,7 @@ class ResolveBuildProfileTests(unittest.TestCase):
             (6, 1): "android14",
             (6, 6): "android15",
             (6, 12): "android16",
+            (6, 18): "android17",
         }
         for (major, patch), android in cases.items():
             with self.subTest(version=f"{major}.{patch}"):
@@ -48,13 +49,14 @@ class ResolveBuildProfileTests(unittest.TestCase):
         self.assertEqual(self.cs.resolve_build_profile(5, 16)[0], (5, 15))
         self.assertEqual(self.cs.resolve_build_profile(6, 5)[0], (6, 1))
         self.assertEqual(self.cs.resolve_build_profile(6, 11)[0], (6, 6))
+        self.assertEqual(self.cs.resolve_build_profile(6, 13)[0], (6, 12))
 
-    def test_at_or_above_highest_line_maps_to_6_12(self):
-        for major, patch in [(6, 12), (6, 13), (7, 0), (8, 3)]:
+    def test_at_or_above_highest_line_maps_to_6_18(self):
+        for major, patch in [(6, 18), (6, 19), (7, 0), (8, 3)]:
             with self.subTest(version=f"{major}.{patch}"):
                 (pm, pp), android = self.cs.resolve_build_profile(major, patch)
-                self.assertEqual((pm, pp), (6, 12))
-                self.assertEqual(android, "android16")
+                self.assertEqual((pm, pp), (6, 18))
+                self.assertEqual(android, "android17")
 
 
 class ParseKernelVersionOverrideTests(unittest.TestCase):
@@ -112,12 +114,12 @@ class ValidateTreeTests(unittest.TestCase):
         self.assertEqual(result["android_version"], "android12")
         self.assertEqual(result["full_kernel_version"], "5.4.210")
 
-    def test_future_source_maps_to_android16(self):
-        root = self._make_tree(6, 13, 5)
+    def test_future_source_maps_to_android17(self):
+        root = self._make_tree(6, 20, 5)
         result = self.cs.validate_tree(root, ["gki_defconfig"])
-        self.assertEqual(result["kernel_version"], "6.12")
-        self.assertEqual(result["android_version"], "android16")
-        self.assertEqual(result["full_kernel_version"], "6.13.5")
+        self.assertEqual(result["kernel_version"], "6.18")
+        self.assertEqual(result["android_version"], "android17")
+        self.assertEqual(result["full_kernel_version"], "6.20.5")
 
     def test_override_full_version(self):
         root = self._make_tree(5, 10, 177)
@@ -129,11 +131,11 @@ class ValidateTreeTests(unittest.TestCase):
 
     def test_override_without_sublevel_falls_back_to_makefile(self):
         root = self._make_tree(5, 10, 177)
-        result = self.cs.validate_tree(root, ["gki_defconfig"], kernel_version_override="6.13")
-        self.assertEqual(result["kernel_version"], "6.12")
-        self.assertEqual(result["android_version"], "android16")
+        result = self.cs.validate_tree(root, ["gki_defconfig"], kernel_version_override="6.20")
+        self.assertEqual(result["kernel_version"], "6.18")
+        self.assertEqual(result["android_version"], "android17")
         self.assertEqual(result["sub_level"], "177")  # 回落 Makefile sublevel
-        self.assertEqual(result["full_kernel_version"], "6.13.177")
+        self.assertEqual(result["full_kernel_version"], "6.20.177")
 
     def test_override_invalid_raises(self):
         root = self._make_tree(5, 10, 177)

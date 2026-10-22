@@ -35,7 +35,8 @@ object KernelSupport {
         KernelVersionLine("android13", "5.15"),
         KernelVersionLine("android14", "6.1"),
         KernelVersionLine("android15", "6.6"),
-        KernelVersionLine("android16", "6.12")
+        KernelVersionLine("android16", "6.12"),
+        KernelVersionLine("android17", "6.18")
     )
 
     val onePlusLines = listOf(
@@ -224,7 +225,10 @@ object KernelSupport {
         KernelSupportEntry("android16", "6.12", "38", "2025-08"),
         KernelSupportEntry("android16", "6.12", "38", "2025-09"),
         KernelSupportEntry("android16", "6.12", "58", "2025-12"),
-        KernelSupportEntry("android16", "6.12", "69", "2026-03")
+        KernelSupportEntry("android16", "6.12", "69", "2026-03"),
+        KernelSupportEntry("android17", "6.18", "20", "2026-04"),
+        KernelSupportEntry("android17", "6.18", "21", "2026-06"),
+        KernelSupportEntry("android17", "6.18", "32", "2026-09")
     )
 
     fun androidVersions(): List<String> = lines.map { it.androidVersion }
@@ -252,7 +256,9 @@ object KernelSupport {
     fun onePlusSusfsSupported(androidVersion: String, kernelVersion: String): Boolean =
         "$androidVersion/$kernelVersion" in setOf("android14/6.1", "android15/6.6", "android16/6.12")
 
-    fun onePlusLz4kdSupported(kernelVersion: String): Boolean = kernelVersion != "6.12"
+    fun onePlusLz4kdSupported(kernelVersion: String): Boolean = kernelVersion !in setOf("6.12", "6.18")
+
+    fun susfsSupported(kernelVersion: String): Boolean = kernelVersion != "6.18"
 
     fun normalize(config: KernelBuildConfig): KernelBuildConfig {
         val target = normalizeBuildTarget(config.buildTarget)
@@ -331,6 +337,7 @@ object KernelSupport {
             cancelSusfs = when {
                 ksuVariant == KSU_VARIANT_NONE -> true
                 isOnePlus && !onePlusSusfsEnabled -> true
+                !isOnePlus && !susfsSupported(line.kernelVersion) -> true
                 else -> config.cancelSusfs
             },
             kpmPassword = if (isOnePlus || ksuVariant == KSU_VARIANT_NONE || !gkiKpmSupported) "" else config.kpmPassword,
@@ -541,13 +548,13 @@ object KernelSupport {
     }
 
     fun virtualizationSupportOptions(kernelVersion: String): List<String> =
-        if (kernelVersion == "6.12") listOf("off", "on") else listOf("off", "678", "123", "345")
+        if (kernelVersion in setOf("6.12", "6.18")) listOf("off", "on") else listOf("off", "678", "123", "345")
 
     private fun normalizeVirtualizationSupport(kernelVersion: String, value: String): String {
         val normalized = value.trim().lowercase()
         return when {
             normalized in virtualizationSupportOptions(kernelVersion) -> normalized
-            kernelVersion == "6.12" && normalized in setOf("678", "123", "345") -> "on"
+            kernelVersion in setOf("6.12", "6.18") && normalized in setOf("678", "123", "345") -> "on"
             else -> "off"
         }
     }

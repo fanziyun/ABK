@@ -38,12 +38,12 @@ The repository provides GitHub Actions kernel build workflows. The Android app h
 
 ## Scope
 
-- Android 12 / 13 / 14 / 15 / 16 GKI build workflows, plus OnePlus/Oplus device build workflows.
+- Android 12 / 13 / 14 / 15 / 16 / 17 GKI build workflows, plus OnePlus/Oplus device build workflows.
 - KernelSU Official, KernelSU Next, SukiSU, and BakaSU variants.
 - Optional SUSFS, ZRAM, BBG, KPM, Re-Kernel, lz4kd, BBR, proxy optimization, Unicode bypass, and OnePlus 8E support.
 - Artifact handling for AnyKernel3 packages, kernel images, KernelSU managers, and SUSFS modules.
 
-Actual compatibility depends on the device, kernel version, upstream branch state, and current patch compatibility.
+Actual compatibility depends on the device, kernel version, upstream branch state, and current patch compatibility. `android17/6.18` has no upstream SUSFS branch yet (`simonpunk/susfs4ksu` has no `gki-android17-6.18`), so its builds force SUSFS off.
 
 ## Usage
 
@@ -78,7 +78,7 @@ To trigger a full matrix across all manager variants for both GKI and OnePlus in
 
 Virtualization support enables the kernel features needed by Linux container environments, including IPC and PID namespaces, SysV IPC, and POSIX mqueue, so Android devices can run full Linux environments for development or services.
 
-**Supported versions:** 5.10 / 5.15 / 6.1 / 6.6 / 6.12
+**Supported versions:** 5.10 / 5.15 / 6.1 / 6.6 / 6.12 / 6.18
 
 **Usage:** When triggering a build manually, select the `Virtualization Support` option:
 
@@ -89,7 +89,7 @@ Virtualization support enables the kernel features needed by Linux container env
 | `123` | Use 1_2_3 slot patch (fallback) |
 | `345` | Use 3_4_5 slot patch (fallback) |
 
-> **Note:** Kernel 6.12 has only one patch — any non-off option will use it.
+> **Note:** Kernel 6.12 / 6.18 has only one patch — any non-off option will use it.
 
 **If the build fails or bootloops after flashing:** Try switching to a different slot patch (e.g. 678 → 123 or 345). Different kernel sub-levels may require different patches.
 - Flashing kernels is high-risk and may cause boot failure, data loss, or require restoring a stock boot image.
@@ -118,7 +118,7 @@ An empty value means the latest commit of that branch will be used.
 
 ## KSU branch `Latest(最新)` (GKI only)
 
-Applies to every GKI `workflow_dispatch` workflow ([`kernel-custom.yml`](.github/workflows/kernel-custom.yml), [`kernel-a12-5-10.yml`](.github/workflows/kernel-a12-5-10.yml), [`kernel-a13-5-15.yml`](.github/workflows/kernel-a13-5-15.yml), [`kernel-a14-6-1.yml`](.github/workflows/kernel-a14-6-1.yml), [`kernel-a15-6-6.yml`](.github/workflows/kernel-a15-6-6.yml), [`kernel-a16-6-12.yml`](.github/workflows/kernel-a16-6-12.yml), and [`kernel-full-feature-matrix.yml`](.github/workflows/kernel-full-feature-matrix.yml)). The app dispatches [`kernel-custom.yml`](.github/workflows/kernel-custom.yml); on github.com you can also pick **Latest(最新)** when manually running a fixed-version workflow.
+Applies to every GKI `workflow_dispatch` workflow ([`kernel-custom.yml`](.github/workflows/kernel-custom.yml), [`kernel-a12-5-10.yml`](.github/workflows/kernel-a12-5-10.yml), [`kernel-a13-5-15.yml`](.github/workflows/kernel-a13-5-15.yml), [`kernel-a14-6-1.yml`](.github/workflows/kernel-a14-6-1.yml), [`kernel-a15-6-6.yml`](.github/workflows/kernel-a15-6-6.yml), [`kernel-a16-6-12.yml`](.github/workflows/kernel-a16-6-12.yml), [`kernel-a17-6-18.yml`](.github/workflows/kernel-a17-6-18.yml), and [`kernel-full-feature-matrix.yml`](.github/workflows/kernel-full-feature-matrix.yml)). The app dispatches [`kernel-custom.yml`](.github/workflows/kernel-custom.yml); on github.com you can also pick **Latest(最新)** when manually running a fixed-version workflow.
 
 On GitHub Actions and the app GKI build screen, **Latest(最新)** sits between **Dev** and **Custom**. [`resolve-ksu-ref.sh`](.github/scripts/resolve-ksu-ref.sh) resolves upstream KernelSU sources at run time:
 

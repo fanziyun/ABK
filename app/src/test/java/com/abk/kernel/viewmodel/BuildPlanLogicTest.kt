@@ -121,6 +121,29 @@ class BuildPlanLogicTest {
     }
 
     @Test
+    fun android17WorkflowInputMapCarriesSixEighteenMatrix() {
+        val config = KernelSupport.normalize(
+            KernelBuildConfig(
+                androidVersion = "android17",
+                kernelVersion = "6.18",
+                subLevel = "21",
+                osPatchLevel = "2026-06",
+                kernelsuVariant = KSU_VARIANT_BAKASU,
+                virtualizationSupport = "on"
+            )
+        )
+
+        val inputs = config.toInputMap()
+
+        assertEquals("android17", inputs["android_version"])
+        assertEquals("6.18", inputs["kernel_version"])
+        assertEquals("21", inputs["sub_level"])
+        assertEquals("2026-06", inputs["os_patch_level"])
+        assertEquals("on", inputs["virtualization_support"])
+        assertEquals("true", inputs["cancel_susfs"])
+    }
+
+    @Test
     fun customSourceFullPlanRoundTripsWithoutCredentials() {
         val config = KernelSupport.normalize(
             KernelBuildConfig(

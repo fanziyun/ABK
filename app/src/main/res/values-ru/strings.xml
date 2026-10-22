@@ -215,6 +215,7 @@
     <string name="build_oneplus_proxy_optimization">Включить оптимизацию прокси</string>
     <string name="build_oneplus_proxy_mtk_disabled">Для веток MTK оптимизация прокси принудительно отключена.</string>
     <string name="build_oneplus_susfs_unsupported">Для текущего KMI OnePlus нет доступной ветки SUSFS upstream. android12/5.10 и android13/5.15 отключаются автоматически.</string>
+    <string name="build_gki_susfs_unsupported">Для этой линии ядра пока нет доступной ветки SUSFS upstream (сейчас android17/6.18), поэтому SUSFS отключается автоматически.</string>
     <string name="build_oneplus_unicode_bypass">Включить исправление обхода нулевой ширины Unicode</string>
     <string name="build_oneplus_proxy_short">Оптимизация прокси</string>
     <string name="build_oneplus_unicode_short">Обход Unicode</string>

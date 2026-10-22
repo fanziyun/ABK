@@ -1697,6 +1697,9 @@ class _BuildFormCard extends StatelessWidget {
       ksuVariant: form.ksuVariant,
       ksuBranch: form.ksuBranch,
     );
+    final susfsSupported = DesktopKernelSupport.isSusfsSupported(
+      form.kernelVersion,
+    );
     void update(BuildFormState next) {
       if (scope == BuildFormScope.remote) {
         controller.updateForm(next);
@@ -1994,6 +1997,7 @@ class _BuildFormCard extends StatelessWidget {
               _BoolChip(
                 label: 'SUSFS',
                 value: form.susfs,
+                enabled: susfsSupported,
                 onChanged: (value) => update(form.copyWith(susfs: value)),
               ),
               _BoolChip(
@@ -2040,6 +2044,15 @@ class _BuildFormCard extends StatelessWidget {
               ),
             ],
           ),
+          if (!susfsSupported) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              strings.buildSusfsUnsupportedHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           Material(
             color: Colors.transparent,

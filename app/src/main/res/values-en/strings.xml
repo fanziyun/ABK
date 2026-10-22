@@ -215,6 +215,7 @@
     <string name="build_oneplus_proxy_optimization">Enable proxy optimization</string>
     <string name="build_oneplus_proxy_mtk_disabled">Proxy optimization is forced off for MTK branches.</string>
     <string name="build_oneplus_susfs_unsupported">The current OnePlus KMI has no available SUSFS upstream branch. android12/5.10 and android13/5.15 are disabled automatically.</string>
+    <string name="build_gki_susfs_unsupported">No SUSFS upstream branch is available for this kernel line yet (android17/6.18 for now), so SUSFS is disabled automatically.</string>
     <string name="build_oneplus_unicode_bypass">Enable Unicode zero-width bypass fix</string>
     <string name="build_oneplus_proxy_short">Proxy optimization</string>
     <string name="build_oneplus_unicode_short">Unicode bypass</string>

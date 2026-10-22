@@ -797,8 +797,8 @@ class CommandBehaviorTests(unittest.TestCase):
                 self.assertEqual(0, result, output)
                 self.assertIn(expected, output)
 
-    def test_a15_and_a16_dry_runs_forward_oneplus_8e_support(self):
-        for matrix in ("a15", "a16"):
+    def test_a15_a16_and_a17_dry_runs_forward_oneplus_8e_support(self):
+        for matrix in ("a15", "a16", "a17"):
             with self.subTest(matrix=matrix):
                 client = RecordingGitHubClient(fork=None)
                 result, output = self._run_build(
@@ -848,19 +848,142 @@ class CommandBehaviorTests(unittest.TestCase):
         self.assertEqual(0, result, output)
         self.assertIn('"custom_ref": "feature/test"', output)
 
-    def test_a16_dry_run_normalizes_legacy_virtualization_slot(self):
+    def test_a16_and_a17_dry_runs_normalize_legacy_virtualization_slot(self):
+        for matrix in ("a16", "a17"):
+            with self.subTest(matrix=matrix):
+                client = RecordingGitHubClient(fork=None)
+
+                result, output = self._run_build(
+                    client,
+                    matrix=matrix,
+                    virt="123",
+                    dry_run=True,
+                )
+
+                self.assertEqual(0, result, output)
+                self.assertIn('"virtualization_support": "on"', output)
+                self.assertNotIn('"virtualization_support": "123"', output)
+
+    def test_a17_dry_run_auto_disables_susfs(self):
+        client = RecordingGitHubClient(fork=None)
+
+        result, output = self._run_build(
+            client,
+            matrix="a17",
+            ksu_variant="SukiSU",
+            susfs=True,
+            dry_run=True,
+        )
+
+        self.assertEqual(0, result, output)
+        self.assertIn('"cancel_susfs": "true"', output)
+        self.assertNotIn('"cancel_susfs": "false"', output)
+
+    def test_a16_dry_run_keeps_susfs_enabled(self):
         client = RecordingGitHubClient(fork=None)
 
         result, output = self._run_build(
             client,
             matrix="a16",
-            virt="123",
+            ksu_variant="SukiSU",
+            susfs=True,
             dry_run=True,
         )
 
         self.assertEqual(0, result, output)
-        self.assertIn('"virtualization_support": "on"', output)
-        self.assertNotIn('"virtualization_support": "123"', output)
+        self.assertIn('"cancel_susfs": "false"', output)
+
+    def test_custom_android17_618_dry_run_auto_disables_susfs(self):
+        client = RecordingGitHubClient(fork=None)
+
+        result, output = self._run_build(
+            client,
+            android_version="android17",
+            kernel_version="6.18",
+            sub_level="20",
+            os_patch_level="2026-04",
+            ksu_variant="SukiSU",
+            susfs=True,
+            dry_run=True,
+        )
+
+        self.assertEqual(0, result, output)
+        self.assertIn('"cancel_susfs": "true"', output)
+
+    def test_matrix_both_only_a17_disables_susfs(self):
+        client = RecordingGitHubClient(fork=None)
+
+        result, output = self._run_build(
+            client,
+            matrix="both",
+            ksu_variant="SukiSU",
+            susfs=True,
+            dry_run=True,
+        )
+
+        self.assertEqual(0, result, output)
+        self.assertEqual(5, output.count('"cancel_susfs": "false"'))
+        self.assertEqual(1, output.count('"cancel_susfs": "true"'))
+
+    def test_susfs_supported_helper_matches_the_ci_contract(self):
+        self.assertFalse(abk.susfs_supported("6.18"))
+        for kernel in ("5.10", "5.15", "6.1", "6.6", "6.12"):
+            with self.subTest(kernel=kernel):
+                self.assertTrue(abk.susfs_supported(kernel))
+
+    def test_a17_dry_run_dispatches_android17_618_workflow(self):
+        client = RecordingGitHubClient(fork=None)
+
+        result, output = self._run_build(
+            client,
+            matrix="a17",
+            ksu_variant="SukiSU",
+            dry_run=True,
+        )
+
+        self.assertEqual(0, result, output)
+        self.assertIn("workflow=kernel-a17-6-18.yml", output)
+        self.assertEqual(
+            "kernel-a17-6-18.yml",
+            abk.WORKFLOWS["a17"]["file"],
+        )
+        self.assertEqual("android17", abk.WORKFLOWS["a17"]["android"])
+        self.assertEqual("6.18", abk.WORKFLOWS["a17"]["kernel"])
+
+    def test_a17_dry_run_maps_every_virtualization_mode_to_on(self):
+        for virt in ("on", "678", "123", "345"):
+            with self.subTest(virt=virt):
+                client = RecordingGitHubClient(fork=None)
+
+                result, output = self._run_build(
+                    client,
+                    matrix="a17",
+                    virt=virt,
+                    dry_run=True,
+                )
+
+                self.assertEqual(0, result, output)
+                self.assertIn('"virtualization_support": "on"', output)
+                self.assertNotIn('"virtualization_support": "678"', output)
+                self.assertNotIn('"virtualization_support": "123"', output)
+                self.assertNotIn('"virtualization_support": "345"', output)
+
+    def test_a17_and_custom_android17_618_are_supported_lines(self):
+        for overrides in (
+            {"matrix": "a17", "dry_run": True},
+            {
+                "android_version": "android17",
+                "kernel_version": "6.18",
+                "sub_level": "20",
+                "os_patch_level": "2026-04",
+                "dry_run": True,
+            },
+        ):
+            with self.subTest(overrides=overrides):
+                client = RecordingGitHubClient(fork=None)
+                result, output = self._run_build(client, **overrides)
+
+                self.assertEqual(0, result, output)
 
     def test_old_kernel_dry_run_maps_common_virtualization_on_to_678(self):
         client = RecordingGitHubClient(fork=None)
@@ -876,7 +999,7 @@ class CommandBehaviorTests(unittest.TestCase):
         self.assertIn('"virtualization_support": "678"', output)
 
     def test_revision_is_rejected_when_selected_workflow_cannot_accept_it(self):
-        for matrix in ("a12", "a13", "a16", "both"):
+        for matrix in ("a12", "a13", "a16", "a17", "both"):
             with self.subTest(matrix=matrix):
                 client = RecordingGitHubClient(fork=None)
                 result, output = self._run_build(

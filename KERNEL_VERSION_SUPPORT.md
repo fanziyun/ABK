@@ -119,3 +119,17 @@
 | 30 | 2025-07 |
 | 38 | 2025-09 |
 | 58 | 2025-12 |
+
+## Android 17 / 6.18
+
+| sub_level | os_patch_level |
+|---|---|
+| 20 | 2026-04 |
+| 21 | 2026-06 |
+| 32 | 2026-09 |
+| X | lts |
+
+说明：
+
+- LTS 线为 `6.18.34`，按 `sub_level=X` / `os_patch_level=lts` 填写；`.github/workflows/kernel-a17-6-18.yml` 里的 LTS 行当前默认注释（与 Android 16 / 6.12 一致），需要时手动启用。
+- SUSFS 上游 `simonpunk/susfs4ksu` 目前没有 `gki-android17-6.18` 分支，`android17/6.18` 构建会强制关闭 SUSFS；待上游补上该分支后再恢复。

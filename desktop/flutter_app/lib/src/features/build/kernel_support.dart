@@ -26,6 +26,7 @@ class DesktopKernelSupport {
     KernelVersionLine('android14', '6.1'),
     KernelVersionLine('android15', '6.6'),
     KernelVersionLine('android16', '6.12'),
+    KernelVersionLine('android17', '6.18'),
   ];
 
   static const List<KernelSupportEntry> entries = <KernelSupportEntry>[
@@ -145,6 +146,9 @@ class DesktopKernelSupport {
     KernelSupportEntry('android16', '6.12', '38', '2025-09'),
     KernelSupportEntry('android16', '6.12', '58', '2025-12'),
     KernelSupportEntry('android16', '6.12', '69', '2026-03'),
+    KernelSupportEntry('android17', '6.18', '20', '2026-04'),
+    KernelSupportEntry('android17', '6.18', '21', '2026-06'),
+    KernelSupportEntry('android17', '6.18', '32', '2026-09'),
   ];
 
   static const List<String> ksuVariantOptions = <String>[
@@ -226,7 +230,7 @@ class DesktopKernelSupport {
   }
 
   static List<String> virtualizationSupportOptions(String kernelVersion) {
-    return kernelVersion == '6.12'
+    return const <String>{'6.12', '6.18'}.contains(kernelVersion)
         ? const <String>['off', 'on']
         : const <String>['off', '678', '123', '345'];
   }
@@ -251,6 +255,10 @@ class DesktopKernelSupport {
     final sorted = matches.toList(growable: true)
       ..sort((left, right) => _numericCompare(left.subLevel, right.subLevel));
     return sorted.last;
+  }
+
+  static bool isSusfsSupported(String kernelVersion) {
+    return kernelVersion != '6.18';
   }
 
   static bool isKpmSupported({
@@ -284,7 +292,7 @@ class DesktopKernelSupport {
     if (virtualizationSupportOptions(kernelVersion).contains(normalized)) {
       return normalized;
     }
-    if (kernelVersion == '6.12' &&
+    if (const <String>{'6.12', '6.18'}.contains(kernelVersion) &&
         const <String>{'678', '123', '345'}.contains(normalized)) {
       return 'on';
     }

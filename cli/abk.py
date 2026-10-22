@@ -123,15 +123,16 @@ WORKFLOWS = {
     "a14": {"file": "kernel-a14-6-1.yml", "name": t("build_target_a14"), "android": "android14", "kernel": "6.1"},
     "a15": {"file": "kernel-a15-6-6.yml", "name": t("build_target_a15"), "android": "android15", "kernel": "6.6"},
     "a16": {"file": "kernel-a16-6-12.yml", "name": t("build_target_a16"), "android": "android16", "kernel": "6.12"},
+    "a17": {"file": "kernel-a17-6-18.yml", "name": t("build_target_a17"), "android": "android17", "kernel": "6.18"},
     "custom": {"file": "kernel-custom.yml", "name": t("build_target_custom")},
     "source": {"file": "kernel-source.yml", "name": t("build_target_source")},
     "oneplus": {"file": "oneplus-custom.yml", "name": t("build_target_oneplus")},
 }
 
-ANDROID_VERSIONS = ["android12", "android13", "android14", "android15", "android16"]
-KERNEL_VERSIONS = ["5.10", "5.15", "6.1", "6.6", "6.12"]
+ANDROID_VERSIONS = ["android12", "android13", "android14", "android15", "android16", "android17"]
+KERNEL_VERSIONS = ["5.10", "5.15", "6.1", "6.6", "6.12", "6.18"]
 
-MATRIX_TARGETS = ["a12", "a13", "a14", "a15", "a16"]
+MATRIX_TARGETS = ["a12", "a13", "a14", "a15", "a16", "a17"]
 MATRIX_TARGETS_ALL = MATRIX_TARGETS + ["both", "full", "all-managers"]
 KSU_ALL_VARIANTS = ["Official", "SukiSU", "BakaSU"]
 MANAGER_VARIANT_ALIASES = {
@@ -157,6 +158,7 @@ WORKFLOW_RUNTIME_NAMES = {
     "kernel-a14-6-1.yml": "内核构建 - Android 14 (6.1)",
     "kernel-a15-6-6.yml": "内核构建 - Android 15 (6.6)",
     "kernel-a16-6-12.yml": "内核构建 - Android 16 (6.12)",
+    "kernel-a17-6-18.yml": "内核构建 - Android 17 (6.18)",
     "kernel-custom.yml": "Android 内核构建-自定义",
     "kernel-source.yml": "Android 内核构建-类 LineageOS 源码",
     "oneplus-custom.yml": "OnePlus 内核构建-自定义",
@@ -271,6 +273,8 @@ ONEPLUS_SUSFS_SUPPORTED = {
     ("android15", "6.6"),
     ("android16", "6.12"),
 }
+
+SUSFS_UNSUPPORTED_KERNEL_VERSIONS = frozenset({"6.18"})
 
 UNSAFE_WORKFLOW_TEXT_CHARS = frozenset(('"', "'", "`", "$", "\\"))
 
@@ -4342,7 +4346,7 @@ def normalize_virtualization_support(kernel_version, value):
     value = value or "off"
     if value == "off":
         return "off"
-    if kernel_version == "6.12":
+    if kernel_version in ("6.12", "6.18"):
         return "on"
     if value == "on":
         return "678"
@@ -4355,7 +4359,7 @@ def resolve_source_build_profile(version):
     if not match:
         raise ValueError("source kernel version must use X.Y or X.Y.Z")
     selected = (int(match.group(1)), int(match.group(2)))
-    profiles = ((5, 10), (5, 15), (6, 1), (6, 6), (6, 12))
+    profiles = ((5, 10), (5, 15), (6, 1), (6, 6), (6, 12), (6, 18))
     if selected <= profiles[0]:
         profile = profiles[0]
     elif selected >= profiles[-1]:
@@ -4369,9 +4373,18 @@ def resolve_source_build_profile(version):
     return f"{profile[0]}.{profile[1]}"
 
 
-def _susfs_enabled(args, variant):
-    """Return the effective SUSFS state after Android's None normalization."""
+def susfs_supported(kernel_version):
+    """Return whether the selected kernel line can take the SUSFS patches."""
+    return kernel_version not in SUSFS_UNSUPPORTED_KERNEL_VERSIONS
+
+
+def _susfs_enabled(args, variant, kernel_version=None):
+    """Return the effective SUSFS state after None and kernel-line normalization."""
+    if kernel_version is not None and not susfs_supported(kernel_version):
+        return False
     return bool(args.susfs) and variant != "None"
+    if kernel_version is not None and not susfs_supported(kernel_version):
+        return False
 
 
 def _standard_build_inputs(
@@ -4382,7 +4395,7 @@ def _standard_build_inputs(
     supports_supp_op=False,
 ):
     kpm_enabled = bool(args.kpm) and supports_kpm(variant, args.ksu_branch)
-    susfs_enabled = _susfs_enabled(args, variant)
+    susfs_enabled = _susfs_enabled(args, variant, kernel_version)
     virtualization_support = normalize_virtualization_support(
         kernel_version,
         args.virt,
@@ -4845,11 +4858,23 @@ def cmd_build(args):
                         if target == "custom"
                         else workflow["kernel"]
                     )
+                    if args.susfs and not susfs_supported(kernel_version):
+                        warning = t(
+                            "line_no_susfs",
+                            android=(
+                                args.android_version or "android12"
+                                if target == "custom"
+                                else workflow["android"]
+                            ),
+                            kernel=kernel_version,
+                        )
+                        warning_messages.append(warning)
+                        print(t("warning_prefix") + " " + warning)
                     inputs = _standard_build_inputs(
                         args,
                         variant,
                         kernel_version,
-                        supports_supp_op=target in ("a15", "a16"),
+                        supports_supp_op=target in ("a15", "a16", "a17"),
                     )
                     if target == "custom":
                         inputs.update({
@@ -5536,6 +5561,7 @@ def refresh_workflow_names():
         "a14": "build_target_a14",
         "a15": "build_target_a15",
         "a16": "build_target_a16",
+        "a17": "build_target_a17",
         "custom": "build_target_custom",
         "source": "build_target_source",
         "oneplus": "build_target_oneplus",

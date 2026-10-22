@@ -85,6 +85,15 @@ class TranslationCatalogTests(unittest.TestCase):
                         placeholders(catalog[key]),
                     )
 
+    def test_susfs_unsupported_lines_have_a_dedicated_warning(self):
+        for locale, catalog in self.catalogs.items():
+            with self.subTest(locale=locale):
+                self.assertIn("line_no_susfs", catalog)
+                self.assertEqual(
+                    collections.Counter({"android": 1, "kernel": 1}),
+                    placeholders(catalog["line_no_susfs"]),
+                )
+
     def test_output_help_uses_a_platform_path_placeholder(self):
         for locale, catalog in self.catalogs.items():
             with self.subTest(locale=locale):
