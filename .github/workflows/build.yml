@@ -4068,6 +4068,22 @@ jobs:
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
             sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./common/BUILD.bazel
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("common/BUILD.bazel")
+          text = path.read_text()
+          text, removed = re.subn(
+              r"kmi_symbol_list_strict_mode\s*=\s*select\(\{.*?\}\),[ \t]*\n",
+              "",
+              text,
+              flags=re.S,
+          )
+          if removed:
+              path.write_text(text)
+              print(f"removed {removed} multi-line kmi_symbol_list_strict_mode select block(s)")
+          PY
             sed -i '/kmi_symbol_list_strict_mode/d' ./common/BUILD.bazel
             rm -rf ./common/android/abi_gki_protected_exports_*
             sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
