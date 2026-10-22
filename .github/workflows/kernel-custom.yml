@@ -1,4 +1,5 @@
 name: Android 内核构建-自定义
+run-name: ABK-CI ${{ inputs.version }}
 
 permissions:
   contents: write
@@ -164,7 +165,7 @@ on:
 
       # ==================== 自定义外部模块 ====================
       custom_external_modules:
-        description: "自定义外部模块（兼容旧 repo;stage，也支持 module:repo;stage 与 set:repo#child;stage，用 | 分隔）"
+        description: "自定义外部模块（兼容旧 repo;stage，也支持 module:repo;stage 与 set:repo#child;stage；可选第三字段 ;ref=<git ref> 钉住分支/tag/refs/pull/N/head，用 | 分隔）"
         required: false
         type: string
         default: ""
