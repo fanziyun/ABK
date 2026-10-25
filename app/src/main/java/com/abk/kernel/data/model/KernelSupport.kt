@@ -300,7 +300,7 @@ object KernelSupport {
             if (isOnePlus || ksuVariant == KSU_VARIANT_NONE) KSU_BRANCH_STABLE else config.kernelsuBranch
         )
         val onePlusIsMtk = onePlusCpu.startsWith("mt")
-        val onePlusKpmSupported = !onePlusIsMtk && ksuVariant in setOf(KSU_VARIANT_SUKISU, KSU_VARIANT_BAKASU)
+        val onePlusKpmSupported = !onePlusIsMtk && ksuVariant == KSU_VARIANT_SUKISU
         val gkiKpmSupported = isKpmSupported(BUILD_TARGET_GKI, ksuVariant, normalizedKsuBranch)
         val onePlusProxyAllowed = !onePlusIsMtk
         val onePlusSusfsEnabled = onePlusSusfsSupported(line.androidVersion, line.kernelVersion)
@@ -336,6 +336,7 @@ object KernelSupport {
             },
             cancelSusfs = when {
                 ksuVariant == KSU_VARIANT_NONE -> true
+                ksuVariant == KSU_VARIANT_BAKASU -> true
                 isOnePlus && !onePlusSusfsEnabled -> true
                 !isOnePlus && !susfsSupported(line.kernelVersion) -> true
                 else -> config.cancelSusfs
@@ -535,17 +536,15 @@ object KernelSupport {
     fun isKpmSupported(buildTarget: String, ksuVariant: String, ksuBranch: String): Boolean {
         val normalizedTarget = normalizeBuildTarget(buildTarget)
         val normalizedVariant = normalizeKsuVariant(ksuVariant, normalizedTarget)
-        val normalizedBranch = normalizeKsuBranch(ksuBranch)
-        return when {
-            normalizedVariant == KSU_VARIANT_NONE -> false
-            normalizedVariant == KSU_VARIANT_OFFICIAL -> false
-            normalizedTarget == BUILD_TARGET_ONEPLUS ->
-                normalizedVariant in setOf(KSU_VARIANT_SUKISU, KSU_VARIANT_BAKASU)
-            normalizedVariant == KSU_VARIANT_BAKASU &&
-                normalizedBranch !in setOf(KSU_BRANCH_STABLE, KSU_BRANCH_CUSTOM) -> false
-            else -> true
-        }
+        return normalizedVariant == KSU_VARIANT_SUKISU
     }
+
+    /**
+     * SUSFS 勾选仅对非 BakaSU 管理器开放：BakaSU 使用内置 SUSFS 支持，
+     * 无法跟随上游 SUSFS 补丁集，因此该组合在构建端被强制关闭。
+     */
+    fun isSusfsSelectable(ksuVariant: String): Boolean =
+        normalizeKsuVariant(ksuVariant, BUILD_TARGET_GKI) != KSU_VARIANT_BAKASU
 
     fun virtualizationSupportOptions(kernelVersion: String): List<String> =
         if (kernelVersion in setOf("6.12", "6.18")) listOf("off", "on") else listOf("off", "678", "123", "345")

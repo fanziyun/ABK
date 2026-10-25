@@ -1749,11 +1749,12 @@ fun BuildScreen(
                 if (isOnePlusBuild) {
                     val proxyAllowed = !config.onePlusCpu.startsWith("mt")
                     val onePlusSusfsSupported = KernelSupport.onePlusSusfsSupported(config.androidVersion, config.kernelVersion)
+                    val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
                     val onePlusLz4kdSupported = KernelSupport.onePlusLz4kdSupported(config.kernelVersion)
                     SwitchRow(
                         stringResource(R.string.build_enable_susfs),
                         !config.cancelSusfs && onePlusSusfsSupported,
-                        enabled = !noRootScheme && onePlusSusfsSupported
+                        enabled = !noRootScheme && onePlusSusfsSupported && susfsSelectable
                     ) {
                         vm.updateBuildConfig(KernelSupport.normalize(config.copy(cancelSusfs = !it)))
                     }
@@ -1806,10 +1807,11 @@ fun BuildScreen(
                     }
                 } else {
                     val gkiSusfsSupported = KernelSupport.susfsSupported(config.kernelVersion)
+                    val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
                     SwitchRow(
                         stringResource(R.string.build_enable_susfs),
                         !config.cancelSusfs && gkiSusfsSupported,
-                        enabled = !noRootScheme && gkiSusfsSupported
+                        enabled = !noRootScheme && gkiSusfsSupported && susfsSelectable
                     ) {
                         vm.updateBuildConfig(KernelSupport.normalize(config.copy(cancelSusfs = !it)))
                     }
