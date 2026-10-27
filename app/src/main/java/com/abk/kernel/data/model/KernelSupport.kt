@@ -532,10 +532,6 @@ object KernelSupport {
         return normalizedVariant == KSU_VARIANT_SUKISU
     }
 
-    /**
-     * SUSFS 勾选仅对非 BakaSU 管理器开放：BakaSU 使用内置 SUSFS 支持，
-     * 无法跟随上游 SUSFS 补丁集，因此该组合在构建端被强制关闭。
-     */
     fun isSusfsSelectable(ksuVariant: String): Boolean =
         normalizeKsuVariant(ksuVariant, BUILD_TARGET_GKI) != KSU_VARIANT_BAKASU
 
