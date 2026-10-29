@@ -309,6 +309,58 @@ class KernelWorkflowRegressionTests(unittest.TestCase):
                 if use_xdg:
                     self.assertFalse((home / ".cache/bazel-disk").exists())
 
+    def test_bazel_attribute_cleanup_handles_all_known_forms(self):
+        block = textwrap.dedent(self._step_run_block("配置内核名称"))
+        match = re.search(r"<<'PY'\n(?P<body>.*?)\n^PY$", block, re.S | re.M)
+        self.assertIsNotNone(match, "BUILD.bazel cleanup block not found")
+        script = match.group("body")
+
+        cases = {
+            "quoted-dict": (
+                "define_common_kernels(target_configs = {\n"
+                '    "kernel_aarch64": {\n'
+                '        "kmi_symbol_list_strict_mode": True,\n'
+                '        "protected_exports_list": "android/abi_gki_protected_exports_aarch64",\n'
+                '        "makefile": ":Makefile",\n'
+                "    },\n"
+                "})\n"
+            ),
+            "bare-assignment": (
+                "common_kernel(\n"
+                '    name = "kernel_aarch64",\n'
+                "    kmi_symbol_list_strict_mode = True,\n"
+                '    makefile = ":Makefile",\n'
+                ")\n"
+            ),
+            "multi-line-select": (
+                "common_kernel(\n"
+                '    name = "kernel_aarch64",\n'
+                "    kmi_symbol_list_strict_mode = select({\n"
+                '        "//conditions:default": True,\n'
+                "    }),\n"
+                '    makefile = ":Makefile",\n'
+                ")\n"
+            ),
+        }
+        for label, source in cases.items():
+            with self.subTest(form=label):
+                with tempfile.TemporaryDirectory() as tmp:
+                    common = Path(tmp) / "common"
+                    common.mkdir()
+                    target = common / "BUILD.bazel"
+                    target.write_text(source, encoding="utf-8")
+                    result = subprocess.run(
+                        [sys.executable, "-c", script],
+                        cwd=tmp,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    rewritten = target.read_text(encoding="utf-8")
+                    self.assertNotIn("kmi_symbol_list_strict_mode", rewritten)
+                    self.assertNotIn("protected_exports_list", rewritten)
+                    self.assertIn("kernel_aarch64", rewritten)
+
     def _step_run_block(self, name):
         match = re.search(
             rf"(?ms)^      - name: {re.escape(name)}\n.*?^        run: \|\n"

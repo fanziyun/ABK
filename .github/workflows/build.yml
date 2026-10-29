@@ -4151,21 +4151,23 @@ jobs:
               removed = []
 
               kmi_multi = re.compile(
-                  r'^[ \t]*kmi_symbol_list_strict_mode\b[^\n]*select\(\{.*?\}\),?[ \t]*\n?',
+                  r'^[ \t]*(?:"kmi_symbol_list_strict_mode"\s*:|kmi_symbol_list_strict_mode\s*=)\s*select\(\{.*?\}\),?[ \t]*\n?',
                   re.M | re.S,
               )
               kmi_single = re.compile(
-                  r'^[ \t]*kmi_symbol_list_strict_mode\b[^\n]*$',
+                  r'^[ \t]*(?:"kmi_symbol_list_strict_mode"\s*:|kmi_symbol_list_strict_mode\s*=)[^\n]*$',
                   re.M,
               )
               text, count = kmi_multi.subn("", text)
               if count:
                   removed.append("kmi_symbol_list_strict_mode(select)")
-              else:
+              if kmi_single.search(text):
+                  if re.search(r'^[ \t]*(?:"kmi_symbol_list_strict_mode"\s*:|kmi_symbol_list_strict_mode\s*=)[^\n]*select\(', text, re.M):
+                      raise SystemExit("BUILD.bazel: kmi_symbol_list_strict_mode 多行形式无法安全移除")
                   text, count = kmi_single.subn("", text)
                   if count:
                       removed.append("kmi_symbol_list_strict_mode")
-              if "kmi_symbol_list_strict_mode" in text:
+              if re.search(r'^[ \t]*(?:"kmi_symbol_list_strict_mode"\s*:|kmi_symbol_list_strict_mode\s*=)', text, re.M):
                   raise SystemExit("BUILD.bazel: kmi_symbol_list_strict_mode 形式无法安全移除")
 
               pe_multi = re.compile(
@@ -4173,17 +4175,19 @@ jobs:
                   re.M | re.S,
               )
               pe_single = re.compile(
-                  r'^[ \t]*"protected_exports_list"\s*:[^\n]*,\s*$',
+                  r'^[ \t]*"protected_exports_list"\s*:[^\n]*$',
                   re.M,
               )
               text, count = pe_multi.subn("", text)
               if count:
                   removed.append("protected_exports_list(select)")
-              else:
+              if pe_single.search(text):
+                  if re.search(r'^[ \t]*"protected_exports_list"\s*:[^\n]*select\(', text, re.M):
+                      raise SystemExit("BUILD.bazel: protected_exports_list 多行形式无法安全移除")
                   text, count = pe_single.subn("", text)
                   if count:
                       removed.append("protected_exports_list")
-              if '"protected_exports_list"' in text:
+              if re.search(r'^[ \t]*"protected_exports_list"\s*:', text, re.M):
                   raise SystemExit("BUILD.bazel: protected_exports_list 形式无法安全移除")
 
               if removed:
