@@ -4360,7 +4360,7 @@ def resolve_source_build_profile(version):
     if not match:
         raise ValueError("source kernel version must use X.Y or X.Y.Z")
     selected = (int(match.group(1)), int(match.group(2)))
-    profiles = ((5, 10), (5, 15), (6, 1), (6, 6), (6, 12))
+    profiles = ((5, 10), (5, 15), (6, 1), (6, 6), (6, 12), (6, 18))
     if selected <= profiles[0]:
         profile = profiles[0]
     elif selected >= profiles[-1]:
@@ -4436,12 +4436,19 @@ def _source_build_inputs(args, variant):
     """Return all 25 inputs in kernel-source.yml's App-compatible contract."""
     kpm_enabled = bool(args.kpm) and supports_kpm(variant, args.ksu_branch)
     virtualization_support = args.virt or "off"
+    cancel_susfs = not _susfs_enabled(args, variant)
+    use_bbg = bool(args.bbg)
     if args.source_kernel_version:
         profile = resolve_source_build_profile(args.source_kernel_version)
         virtualization_support = normalize_virtualization_support(
             profile,
             virtualization_support,
         )
+        # 6.18 没有 SUSFS 上游分支，BBG 也依赖 6.13 已删除的 blkdev API。
+        # 服务端会按 preflight 解析出的内核线再关一次，这里提前对齐，避免下发必失败组合。
+        if profile == "6.18":
+            cancel_susfs = True
+            use_bbg = False
     return {
         "source_repo": args.source_repo,
         "source_ref": args.source_ref,
@@ -4462,13 +4469,13 @@ def _source_build_inputs(args, variant):
         "build_time": args.build_time or "",
         "virtualization_support": virtualization_support,
         "use_zram": str(bool(args.zram)).lower(),
-        "use_bbg": str(bool(args.bbg)).lower(),
+        "use_bbg": str(use_bbg).lower(),
         "use_ddk": str(bool(args.ddk)).lower(),
         "use_ntsync": str(bool(args.ntsync)).lower(),
         "use_networking": str(bool(args.networking)).lower(),
         "use_kpm": str(kpm_enabled).lower(),
         "use_rekernel": str(bool(args.rekernel)).lower(),
-        "cancel_susfs": str(not _susfs_enabled(args, variant)).lower(),
+        "cancel_susfs": str(cancel_susfs).lower(),
         "zram_full_algo": str(bool(args.zram_full_algo)).lower(),
         "zram_extra_algos": args.zram_extra_algos or "",
         "kpm_password": args.kpm_password if kpm_enabled and args.kpm_password else "",
@@ -5027,6 +5034,8 @@ def cmd_build(args):
             print(f"\n[{index}/{len(plans)}] ", end="")
         print(t("triggering_name", name=plan["name"]))
         plan_kpm_enabled = plan["inputs"].get("use_kpm", str(bool(args.kpm)).lower()) == "true"
+        # a17 工作流没有 SUSFS/BBG 开关，工作流内已固定关闭，报告按实际下发值展示。
+        plan_bbg_enabled = bool(args.bbg) and plan.get("target") != "a17"
         if "enable_susfs" in plan["inputs"]:
             plan_susfs_enabled = (
                 str(plan["inputs"]["enable_susfs"]).lower() == "true"
@@ -5036,13 +5045,13 @@ def cmd_build(args):
                 str(plan["inputs"]["cancel_susfs"]).lower() != "true"
             )
         else:
-            plan_susfs_enabled = bool(args.susfs)
+            plan_susfs_enabled = bool(args.susfs) and plan.get("target") != "a17"
         print(
             "  " + t(
                 "build_feat_line",
                 susfs=t("enabled") if plan_susfs_enabled else t("disabled"),
                 zram=t("enabled") if args.zram else t("disabled"),
-                bbg=t("enabled") if args.bbg else t("disabled"),
+                bbg=t("enabled") if plan_bbg_enabled else t("disabled"),
                 ddk=t("enabled") if args.ddk else t("disabled"),
                 kpm=t("enabled") if plan_kpm_enabled else t("disabled"),
                 rekernel=t("enabled") if args.rekernel else t("disabled"),

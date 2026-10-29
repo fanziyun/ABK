@@ -295,6 +295,12 @@ jobs:
                   "kernel_version": kernel_version,
                   "sub_level": sub_level,
                   "os_patch_level": os_patch_level,
+                  # android17-6.18 缺少 SUSFS 上游分支、6.13 起删除了 BBG 依赖的
+                  # blkdev_get_no_open/blkdev_put_no_open、一加 8E 补丁也不覆盖 6.18。
+                  # 矩阵按行关闭这三个开关，否则默认参数会把新增行打成必失败。
+                  "line_supported": not (
+                      android_version == "android17" and kernel_version == "6.18"
+                  ),
               }
               key = (android_version, kernel_version, sub_level)
               if key not in latest or os_patch_level > latest[key]["os_patch_level"]:
@@ -358,7 +364,7 @@ jobs:
               summary.write(f"- 自定义外部模块: {'true' if os.environ.get('MATRIX_CUSTOM_EXTERNAL_MODULES', '').strip() else 'false'}\n")
               summary.write(f"- 自定义外部模块参数: {env_value('MATRIX_CUSTOM_EXTERNAL_MODULES')}\n")
               summary.write(f"- 上传辅助产物: {env_enabled('MATRIX_UPLOAD_AUX_ARTIFACTS')}\n")
-              summary.write("- Android16/6.12 与 Android17/6.18: ZRAM off\n")
+              summary.write("- Android16/6.12 与 Android17/6.18: 跳过 legacy LZ4K 补丁栈；Android17/6.18 额外关闭 SUSFS/BBG/一加8E\n")
               summary.write("- LTS: 已排除\n\n")
               for combo in sorted(counts):
                   summary.write(f"- {combo}: {counts[combo]}\n")
@@ -387,14 +393,14 @@ jobs:
       revision: ${{ inputs.revision || '' }}
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
-      use_bbg: ${{ inputs.use_bbg }}
+      use_bbg: ${{ inputs.use_bbg && matrix.line_supported }}
       use_ddk: ${{ inputs.use_ddk }}
       use_ntsync: ${{ inputs.use_ntsync }}
       use_networking: ${{ inputs.use_networking }}
       use_kpm: ${{ inputs.use_kpm && (inputs.kernelsu_variant == 'SukiSU' || (inputs.kernelsu_variant == 'BakaSU' && (inputs.kernelsu_branch == 'Stable(标准)' || inputs.kernelsu_branch == 'Custom(自定义)'))) }}
       use_rekernel: ${{ inputs.use_rekernel }}
-      enable_susfs: ${{ inputs.enable_susfs }}
-      supp_op: ${{ inputs.supp_op }}
+      enable_susfs: ${{ inputs.enable_susfs && matrix.line_supported }}
+      supp_op: ${{ inputs.supp_op && matrix.line_supported }}
       virtualization_support: ${{ inputs.virtualization_support == 'off' && 'off' || ((matrix.kernel_version == '6.12' || matrix.kernel_version == '6.18') && 'on' || (inputs.virtualization_support == 'on' && '678' || inputs.virtualization_support)) }}
       zram_full_algo: ${{ inputs.zram_full_algo }}
       zram_extra_algos: ${{ inputs.zram_extra_algos || '' }}

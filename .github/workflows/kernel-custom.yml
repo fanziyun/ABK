@@ -193,13 +193,15 @@ jobs:
       version: ${{ inputs.version || '' }}
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
-      use_bbg: ${{ inputs.use_bbg }}
+      # android17/6.18 没有 BBG 与一加 8E 的上游支持，和 SUSFS 一样在入口自动关闭，
+      # 避免默认值或残留配置把 6.18 构建打到编译期失败。
+      use_bbg: ${{ inputs.use_bbg && !(inputs.android_version == 'android17' && inputs.kernel_version == '6.18') }}
       use_ddk: ${{ inputs.use_ddk }}
       use_ntsync: ${{ inputs.use_ntsync || false }}
       use_networking: ${{ inputs.use_networking || false }}
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel || false }}
-      supp_op: ${{ inputs.supp_op || false }}
+      supp_op: ${{ (inputs.supp_op || false) && !(inputs.android_version == 'android17' && inputs.kernel_version == '6.18') }}
       enable_susfs: ${{ !(inputs.cancel_susfs || (inputs.android_version == 'android17' && inputs.kernel_version == '6.18')) }}
       virtualization_support: ${{ inputs.virtualization_support || 'off' }}
       zram_full_algo: ${{ inputs.zram_full_algo || false }}

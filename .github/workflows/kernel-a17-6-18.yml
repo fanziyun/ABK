@@ -208,7 +208,9 @@ jobs:
       version: ${{ inputs.version || '' }}
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
-      use_bbg: ${{ inputs.use_bbg }}
+      # 6.18 删除 blkdev_get_no_open/blkdev_put_no_open，上游 BBG 补丁无法编译；
+      # 与 enable_susfs 一样固定关闭（输入保留只为兼容 CLI 的通用参数集）。
+      use_bbg: false
       use_ddk: ${{ inputs.use_ddk }}
       use_ntsync: ${{ inputs.use_ntsync }}
       use_networking: ${{ inputs.use_networking }}

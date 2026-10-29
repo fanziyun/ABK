@@ -193,10 +193,11 @@ jobs:
           effective_zram_full_algo="${{ inputs.zram_full_algo }}"
           effective_zram_extra_algos="${{ inputs.zram_extra_algos || '' }}"
           effective_zram_legacy_lz4k="true"
-          effective_zram_use_optional_algo="false"
+          effective_modern_gki="false"
 
           case "${{ inputs.kernel_version }}" in
             6.12|6.18)
+              effective_modern_gki="true"
               effective_zram_legacy_lz4k="false"
               ;;
           esac
@@ -204,6 +205,14 @@ jobs:
           if [ "${{ inputs.android_version }}" = "android17" ] && [ "${{ inputs.kernel_version }}" = "6.18" ] \
             && [ "${{ inputs.enable_susfs }}" = "true" ]; then
             echo "::error::android17/6.18 暂不支持 SUSFS：susfs4ksu 尚未提供 gki-android17-6.18 分支，请关闭 SUSFS 后重试。"
+            exit 1
+          fi
+
+          # 6.18 已删除 blkdev_get_no_open/blkdev_put_no_open，上游 Baseband-guard 仍调用旧 API，
+          # BBG 在 6.18 上必然编译失败；入口工作流会按内核线自动关闭，直连 build.yml 打开则直接拒绝。
+          if [ "${{ inputs.android_version }}" = "android17" ] && [ "${{ inputs.kernel_version }}" = "6.18" ] \
+            && [ "${{ inputs.use_bbg }}" = "true" ]; then
+            echo "::error::android17/6.18 暂不支持 BBG：上游 Baseband-guard 仍使用 6.18 已删除的 blkdev_get_no_open/blkdev_put_no_open，请关闭 BBG 后重试。"
             exit 1
           fi
 
@@ -227,18 +236,12 @@ jobs:
             fi
           fi
 
-          if [ "$effective_use_zram" = "true" ] && [ "$effective_zram_full_algo" != "true" ] && [ -n "$effective_zram_extra_algos" ]; then
-            if python3 -c 'import sys; algos=[item.strip().lower() for item in sys.argv[1].split(",") if item.strip()]; raise SystemExit(0 if "zstdp" in algos else 1)' "$effective_zram_extra_algos"; then
-              effective_zram_use_optional_algo="true"
-            fi
-          fi
-
           {
             echo "EFFECTIVE_USE_ZRAM=$effective_use_zram"
             echo "EFFECTIVE_ZRAM_FULL_ALGO=$effective_zram_full_algo"
             echo "EFFECTIVE_ZRAM_EXTRA_ALGOS=$effective_zram_extra_algos"
             echo "EFFECTIVE_ZRAM_LEGACY_LZ4K=$effective_zram_legacy_lz4k"
-            echo "EFFECTIVE_ZRAM_USE_OPTIONAL_ALGO=$effective_zram_use_optional_algo"
+            echo "EFFECTIVE_MODERN_GKI=$effective_modern_gki"
           } >> "$GITHUB_ENV"
 
           effective_ksu_branch="${{ inputs.ksu_branch }}"
@@ -3140,7 +3143,10 @@ jobs:
           fi
           if [[ "$ABK_ANDROID_VERSION" == "android12" && "$ABK_KERNEL_VERSION" == "5.10" ]]; then
             apply_android12_ntsync_compat "$PATCH_FILE"
-          elif [ "$NATIVE_NTSYNC" = "true" ] && [ ! -f "$PATCH_FILE" ]; then
+          elif [ "$ABK_ANDROID_VERSION" = "android17" ] && [ "$ABK_KERNEL_VERSION" = "6.18" ] \
+            && [ ! -f "$PATCH_FILE" ]; then
+            # kernel_patches 仓还没有 android17-6.18 的 ntsync compat；6.18 先依赖内核原生实现。
+            # 其它原生内核线（android16-6.12）缺少兼容补丁时仍走 apply_ntsync_patch 直接报错。
             echo "::warning::未找到 ${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION} 的 NTsync 兼容补丁 ($(basename "$PATCH_FILE"))，按内核原生实现继续。"
           else
             apply_ntsync_patch "$PATCH_FILE"
@@ -3496,14 +3502,6 @@ jobs:
             echo "${{ inputs.kernel_version }} 检测到新式 zram backend，跳过 legacy LZ4K/LZ4KD/LZ4K_OPLUS 补丁栈。"
           fi
 
-          if [ "${EFFECTIVE_ZRAM_USE_OPTIONAL_ALGO:-false}" = "true" ]; then
-            chmod +x "$ZZH_PATCHES/zram/setup_zstdp.sh"
-            ABK_ZSTDP_UPSTREAM_TAG="v6.15" \
-              bash "$ZZH_PATCHES/zram/setup_zstdp.sh" integrate "$PWD"
-          else
-            echo "未请求额外可选 ZRAM 算法，跳过附加算法集成。"
-          fi
-
       - name: 修复 6.6 WiFi/蓝牙兼容性（三星 + 小米）
         if: inputs.kernel_version == '6.6'
         working-directory: ${{ env.KERNEL_ROOT }}/common
@@ -3583,11 +3581,6 @@ jobs:
             set_config_value "$1" n
           }
 
-          enable_zstdp_base() {
-            set_config_value CONFIG_XXHASH y
-            set_config_value CONFIG_CRYPTO_ZSTDP y
-          }
-
           enable_legacy_full_algos() {
             set_config_value CONFIG_CRYPTO_LZO y
             set_config_value CONFIG_CRYPTO_LZ4 y
@@ -3616,7 +3609,6 @@ jobs:
               "deflate")    set_config_value CONFIG_CRYPTO_DEFLATE y ;;
               "842")        set_config_value CONFIG_CRYPTO_842 y ;;
               "zstd")       set_config_value CONFIG_CRYPTO_ZSTD y ;;
-              "zstdp")      enable_zstdp_base ;;
               *) echo "::warning::未知的 ZRAM 算法: $algo，跳过" ;;
             esac
           }
@@ -3630,7 +3622,6 @@ jobs:
               "deflate")    set_config_value CONFIG_ZRAM_BACKEND_DEFLATE y ;;
               "842")        set_config_value CONFIG_ZRAM_BACKEND_842 y ;;
               "zstd")       set_config_value CONFIG_ZRAM_BACKEND_ZSTD y ;;
-              "zstdp")      set_config_value CONFIG_ZRAM_BACKEND_ZSTDP y; enable_zstdp_base ;;
               "lz4k"|"lz4k_oplus"|"lz4kd")
                 echo "::warning::${algo} 暂不支持新式 zram backend（6.12/6.18），跳过"
                 ;;
@@ -3647,13 +3638,15 @@ jobs:
           set_config_value CONFIG_ZSMALLOC y
           set_config_value CONFIG_ZRAM y
 
+          # 条目形状变化时宁可让步骤失败，也不能“报告成功但什么都没删”。
           python3 - "$KERNEL_ROOT" <<'PY'
-          import os
+          import re
           import sys
           from pathlib import Path
 
           root = Path(sys.argv[1])
           ENTRIES = ("drivers/block/zram/zram.ko", "mm/zsmalloc.ko")
+          QUOTES = "\"'"
           patched, skipped = [], []
           for rel in ("common/modules.bzl", "common/bazel/modules_private.bzl"):
               path = root / rel
@@ -3663,8 +3656,18 @@ jobs:
               text = path.read_text(encoding="utf-8")
               new = text
               for entry in ENTRIES:
-                  for quoted in (f'"{entry}"', f"'{entry}'"):
-                      new = new.replace(quoted + ",\n", "").replace(quoted + "\n", "")
+                  escaped = re.escape(entry)
+                  # 整行条目：允许尾随逗号、注释和空白。
+                  line_pattern = re.compile(
+                      rf"^[ \t]*[{QUOTES}]{escaped}[{QUOTES}][ \t]*,?[ \t]*(?:#.*)?\n?",
+                      re.M,
+                  )
+                  new, removed_count = line_pattern.subn("", new)
+                  if removed_count == 0:
+                      # 同一行里多个条目：只去掉带引号且带逗号的条目。
+                      new = re.sub(rf"[{QUOTES}]{escaped}[{QUOTES}][ \t]*,", "", new)
+                  if entry in new:
+                      raise SystemExit(f"{rel}: 无法安全移除模块条目 {entry}")
               if new != text:
                   path.write_text(new, encoding="utf-8")
                   patched.append(rel)
@@ -3673,7 +3676,7 @@ jobs:
           PY
 
           if grep -q "CONFIG_ZSMALLOC=y" "$CONFIG_FILE" && grep -q "CONFIG_ZRAM=y" "$CONFIG_FILE"; then
-            if [ "${{ inputs.kernel_version }}" != "6.12" ] && [ "${{ inputs.kernel_version }}" != "6.18" ]; then
+            if [ "${EFFECTIVE_MODERN_GKI:-false}" != "true" ]; then
               while IFS= read -r line; do
                 case "$line" in
                   ''|'#'*) continue ;;
@@ -3688,7 +3691,7 @@ jobs:
           # ---- ZRAM 完整算法支持 ----
           if [ "${EFFECTIVE_ZRAM_FULL_ALGO:-false}" = "true" ]; then
             echo "启用 ZRAM 完整算法支持..."
-            if [ "${{ inputs.kernel_version }}" = "6.12" ] || [ "${{ inputs.kernel_version }}" = "6.18" ]; then
+            if [ "${EFFECTIVE_MODERN_GKI:-false}" = "true" ]; then
               enable_modern_full_algos
             else
               enable_legacy_full_algos
@@ -3699,7 +3702,7 @@ jobs:
             IFS=',' read -ra ALGOS <<< "$EFFECTIVE_ZRAM_EXTRA_ALGOS"
             for raw_algo in "${ALGOS[@]}"; do
               algo=$(echo "$raw_algo" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
-              if [ "${{ inputs.kernel_version }}" = "6.12" ] || [ "${{ inputs.kernel_version }}" = "6.18" ]; then
+              if [ "${EFFECTIVE_MODERN_GKI:-false}" = "true" ]; then
                 enable_modern_algo "$algo"
               else
                 enable_legacy_algo "$algo"
@@ -4143,39 +4146,56 @@ jobs:
           if [ -f "build/build.sh" ]; then
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
+            # 无法安全移除的残留会直接失败，避免写出被截断的 BUILD.bazel。
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("common/BUILD.bazel")
           if not path.exists():
               print("未找到 common/BUILD.bazel，跳过属性清理")
           else:
-              lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-              kept, removed, i = [], [], 0
-              while i < len(lines):
-                  line = lines[i]
-                  stripped = line.strip()
-                  if stripped.startswith("kmi_symbol_list_strict_mode"):
-                      depth = line.count("(") - line.count(")")
-                      j = i
-                      while depth > 0 and j + 1 < len(lines):
-                          j += 1
-                          depth += lines[j].count("(") - lines[j].count(")")
-                      removed.append(f"kmi_symbol_list_strict_mode(L{i + 1}-{j + 1})")
-                      i = j + 1
-                      continue
-                  if (
-                      stripped.startswith('"protected_exports_list"')
-                      and stripped.endswith(",")
-                      and not stripped.endswith(("[", "{", "("))
-                  ):
-                      removed.append(f"protected_exports_list(L{i + 1})")
-                      i += 1
-                      continue
-                  kept.append(line)
-                  i += 1
+              text = path.read_text(encoding="utf-8")
+              removed = []
+
+              kmi_multi = re.compile(
+                  r'^[ \t]*kmi_symbol_list_strict_mode\b[^\n]*select\(\{.*?\}\),?[ \t]*\n?',
+                  re.M | re.S,
+              )
+              kmi_single = re.compile(
+                  r'^[ \t]*kmi_symbol_list_strict_mode\b[^\n]*$',
+                  re.M,
+              )
+              text, count = kmi_multi.subn("", text)
+              if count:
+                  removed.append("kmi_symbol_list_strict_mode(select)")
+              else:
+                  text, count = kmi_single.subn("", text)
+                  if count:
+                      removed.append("kmi_symbol_list_strict_mode")
+              if "kmi_symbol_list_strict_mode" in text:
+                  raise SystemExit("BUILD.bazel: kmi_symbol_list_strict_mode 形式无法安全移除")
+
+              pe_multi = re.compile(
+                  r'^[ \t]*"protected_exports_list"\s*:\s*select\(\{.*?\}\),?[ \t]*\n?',
+                  re.M | re.S,
+              )
+              pe_single = re.compile(
+                  r'^[ \t]*"protected_exports_list"\s*:[^\n]*,\s*$',
+                  re.M,
+              )
+              text, count = pe_multi.subn("", text)
+              if count:
+                  removed.append("protected_exports_list(select)")
+              else:
+                  text, count = pe_single.subn("", text)
+                  if count:
+                      removed.append("protected_exports_list")
+              if '"protected_exports_list"' in text:
+                  raise SystemExit("BUILD.bazel: protected_exports_list 形式无法安全移除")
+
               if removed:
-                  path.write_text("".join(kept), encoding="utf-8")
+                  path.write_text(text, encoding="utf-8")
               print("BUILD.bazel 属性清理:", ", ".join(removed) if removed else "无需修改")
           PY
             rm -rf ./common/android/abi_gki_protected_exports_*
@@ -6725,7 +6745,7 @@ jobs:
                 FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
               fi
               LTO_FLAG="--lto=thin"
-              if [ "${{ inputs.kernel_version }}" = "6.12" ] || [ "${{ inputs.kernel_version }}" = "6.18" ]; then
+              if [ "${EFFECTIVE_MODERN_GKI:-false}" = "true" ]; then
                 LTO_FLAG="--lto=none"
               fi
               BAZEL_DISK_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/bazel-disk"
