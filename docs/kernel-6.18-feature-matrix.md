@@ -18,7 +18,7 @@
 | KernelSU 变体 | `kernelsu_variant` = Official / SukiSU / BakaSU | ✅ 三者均已实测 | BakaSU / Official / SukiSU 在 6.18.20、21、32 上各 3/3 通过；SukiSU 需给旧 pin 补 `mnt_namespace.seq` 的 6.18 门控（workflow 已内置），Official 的 KPM 按规则关闭 |
 | SUSFS | `enable_susfs` | ❌ | `susfs4ksu` 最高只有 `gki-android16-6.12`，没有 `gki-android17-6.18`；a17 工作流把 `enable_susfs` 固定为 `false`，直连 `build.yml` 打开会报错退出 |
 | ZRAM 增强 | `use_zram` | ✅（实测） | `CONFIG_ZRAM`/`CONFIG_ZSMALLOC` 内建；6.18 的模块清单在 `common/bazel/modules_private.bzl`（6.12 在 `common/modules.bzl`），两处都按 `$KERNEL_ROOT` 清理 |
-| ZRAM 完整算法 | `zram_full_algo` | ✅ | 6.18 与 6.12 同为"新式 backend"，走 `CONFIG_ZRAM_BACKEND_{LZO,LZ4,LZ4HC,ZSTD,DEFLATE,842}` |
+| ZRAM 完整算法 | `zram_full_algo` | ✅（实测） | run `40890556268` 单版本验证：6.18 走 `CONFIG_ZRAM_BACKEND_{LZO,LZ4,LZ4HC,ZSTD,DEFLATE,842}`，配置步骤与编译均通过 |
 | ZRAM 自定义算法 | `zram_extra_algos` | ✅（受限） | lzo/lz4/lz4hc/deflate/842/zstd 可用；lz4k、lz4kd、lz4k_oplus、zstdp 会在解析阶段被剔除并 warning |
 | legacy LZ4K 补丁栈 | `zram_full_algo`/`zram_extra_algos` 内的 lz4k 系列 | ❌ | `SukiSU_patch` 的 `other/zram/zram_patch` 只有 5.10/5.15/6.1/6.6，6.12 与 6.18 都要跳过 |
 | zstdp 可选后端 | 已废弃 | ❌ 不参与构建 | `zstdp_wrapper.c` 的 scomp 回调签名与 6.12+ crypto API 不兼容；A/B 实测 6.12.23/38/58 全部同因失败，与 6.18 无关。工作流现在无条件把 `zstdp` 从算法列表移除并 warning，`setup_zstdp.sh` 不再触发 |
@@ -30,7 +30,10 @@
 | Re-Kernel | `use_rekernel` | ✅（实测） | 外部 Re-Kernel 源码在 6.18 上集成并编译通过 |
 | 虚拟化支持 | `virtualization_support=on` | ✅（实测） | 复用 `kernel-6.12` 的 SYSVIPC kABI 补丁 + 6.12+ packed 字段 fallback，`init_ipc_ns`/`put_ipc_ns` 导出补齐在 6.18 上编译通过 |
 | 一加 8E 支持 | `supp_op` | ❌ 不适用 | 本次只接 GKI 线：oneplus 系列工作流与一加机型清单（最高 android16/6.12）一律不动，a17 工作流也不提供 `supp_op` 开关 |
-| 自定义源码构建 | `source_mode=custom_git` + `source_kernel_version=6.18` | ✅ | 映射表已加 `6.18 -> android17`，允许 `os_patch_level=lts` |
+| 自定义内核选项 | `custom_kernel_options` | ✅（实测） | run `40890556268` 传 `CONFIG_ZRAM_DEF_COMP_LZ4HC=y`，「配置内核选项」「应用自定义内核选项」两步均 success |
+| 自定义源码构建 | `source_mode=custom_git` + `source_kernel_version=6.18` | ✅（静态） | 映射表已加 `6.18 -> android17`，允许 `os_patch_level=lts`；未跑真实私有仓 |
+| 自定义外部模块 | `custom_external_modules` | ⚠️ 未测 | 需要外部模块仓；链路与 6.12 共用 |
+| 辅助产物上传 | `upload_aux_artifacts` | ⚠️ 未测 | 仅 full-feature matrix / build.yml 暴露该开关，kernel-custom 入口没有 |
 | Boot 镜像 / AnyKernel3 | — | ✅ | 与 6.12 同一打包链路（`boot.img`/`boot-gz.img`/`boot-lz4.img` + AVB footer） |
 | KMI 标签 | — | ✅ | AOSP `android17-6.18` 的 `bazel/constants.scl` 里 `KMI_GENERATION=5`，本地版本串为 `6.18.x-android17-5-g<hash>-<bid>` |
 | PR 抽样编译 | `kernel-pr-sampling.yml` | ✅ | 候选池 `sample-kernel-versions.py` 已加 6.18 三条，与 a17 matrix 严格一致（`cli/tests/test_kernel_random_sampling.py` 交叉校验） |
@@ -63,6 +66,7 @@
 | 8 | 6.18 矩阵（Official，KPM 关） | ✅ 三条全绿 | run `40875146331` |
 | 9 | 6.18 矩阵（SukiSU，首轮） | ❌ 三条全失败 | `mnt_namespace.seq` 在 6.18 被移除，Stable pin 未适配 |
 | 10 | 6.18 矩阵（SukiSU，补门控后） | ✅ 三条全绿 | run `40881944723` |
+| 11 | 6.18 单版本（zram_full_algo + custom_kernel_options） | ✅ 全链路成功 | run `40890556268`：新式全算法 backend、内核选项注入、KPM、Boot、Bundle 均通过 |
 
 > 结论：6.18 的 GKI 链路本身是通的；当前不可用的是 SUSFS（上游无分支）、BBG（用了 6.13 已删的 blkdev API）、zstdp（已废弃）。其余功能在 BakaSU Stable + 三个子版本上实测通过。
 
