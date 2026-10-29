@@ -354,6 +354,9 @@ class KernelWorkflowRegressionTests(unittest.TestCase):
                         cwd=tmp,
                         capture_output=True,
                         text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                     )
                     self.assertEqual(0, result.returncode, result.stderr)
                     rewritten = target.read_text(encoding="utf-8")
