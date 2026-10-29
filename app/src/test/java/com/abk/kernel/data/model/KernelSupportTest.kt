@@ -122,6 +122,15 @@ class KernelSupportTest {
     }
 
     @Test
+    fun android17KernelLineUsesModernZramAndVirtualizationRules() {
+        // 6.18 与 6.12 同为“新式”内核：虚拟化只有开关两档，legacy lz4kd 补丁栈不适用。
+        assertEquals(listOf("off", "on"), KernelSupport.virtualizationSupportOptions("6.18"))
+        assertFalse(KernelSupport.onePlusLz4kdSupported("6.18"))
+        assertFalse(KernelSupport.onePlusLz4kdSupported("6.12"))
+        assertTrue(KernelSupport.onePlusLz4kdSupported("6.6"))
+    }
+
+    @Test
     fun normalizeOnePlusConfigUsesOnePlusDefaultsAndDisablesMtkProxy() {
         val normalized = KernelSupport.normalize(
             KernelBuildConfig(
@@ -340,5 +349,83 @@ class KernelSupportTest {
             )
         )
         assertEquals("6.6.50", custom.sourceKernelVersionOverride)
+    }
+
+    @Test
+    fun susfsIsUnsupportedOnAndroid17Kernel618Only() {
+        // 6.18 没有 SUSFS 上游分支，必须判定为不可用
+        assertFalse(KernelSupport.susfsSupported("android17", "6.18"))
+        // 其余 GKI 线保持现状
+        assertTrue(KernelSupport.susfsSupported("android16", "6.12"))
+        assertTrue(KernelSupport.susfsSupported("android15", "6.6"))
+        assertTrue(KernelSupport.susfsSupported("android14", "6.1"))
+    }
+
+    @Test
+    fun normalizeForcesCancelSusfsOnAndroid17Kernel618() {
+        val normalized = KernelSupport.normalize(
+            KernelBuildConfig(
+                androidVersion = "android17",
+                kernelVersion = "6.18",
+                subLevel = "32",
+                osPatchLevel = "2026-09",
+                kernelsuVariant = KSU_VARIANT_SUKISU,
+                kernelsuBranch = KSU_BRANCH_STABLE,
+                cancelSusfs = false
+            )
+        )
+
+        assertEquals("android17", normalized.androidVersion)
+        assertEquals("6.18", normalized.kernelVersion)
+        assertEquals("32", normalized.subLevel)
+        assertEquals("2026-09", normalized.osPatchLevel)
+        // 用户即使打开 SUSFS，也会被强制关闭
+        assertTrue(normalized.cancelSusfs)
+    }
+
+    @Test
+    fun normalizeKeepsSusfsSelectableOnAndroid16Kernel612() {
+        val normalized = KernelSupport.normalize(
+            KernelBuildConfig(
+                androidVersion = "android16",
+                kernelVersion = "6.12",
+                kernelsuVariant = KSU_VARIANT_SUKISU,
+                kernelsuBranch = KSU_BRANCH_STABLE,
+                cancelSusfs = false
+            )
+        )
+
+        assertEquals("android16", normalized.androidVersion)
+        assertEquals("6.12", normalized.kernelVersion)
+        assertEquals("69", normalized.subLevel)
+        assertEquals("2026-03", normalized.osPatchLevel)
+        // 6.12 不受 6.18 门控影响
+        assertFalse(normalized.cancelSusfs)
+    }
+
+    @Test
+    fun android17Kernel618IsGkiOnlyAndHasThreeSupportEntries() {
+        assertTrue("android17" in KernelSupport.androidVersions())
+        assertTrue("6.18" in KernelSupport.kernelVersions())
+        // 一加没有 A17 机型，一加线不接入 android17
+        assertFalse("android17" in KernelSupport.onePlusAndroidVersions())
+        assertFalse("6.18" in KernelSupport.onePlusKernelVersions())
+
+        assertEquals(
+            listOf("20", "21", "32"),
+            KernelSupport.subLevelOptions("android17", "6.18").filter { it != "X" }
+        )
+        assertEquals(
+            listOf("2026-04"),
+            KernelSupport.patchLevelOptions("android17", "6.18", "20")
+        )
+        assertEquals(
+            listOf("2026-06"),
+            KernelSupport.patchLevelOptions("android17", "6.18", "21")
+        )
+        assertEquals(
+            listOf("2026-09"),
+            KernelSupport.patchLevelOptions("android17", "6.18", "32")
+        )
     }
 }

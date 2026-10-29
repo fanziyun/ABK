@@ -195,15 +195,28 @@ jobs:
           effective_zram_legacy_lz4k="true"
           effective_zram_use_optional_algo="false"
 
-          if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
-            effective_zram_legacy_lz4k="false"
+          case "${{ inputs.kernel_version }}" in
+            6.12|6.18)
+              effective_zram_legacy_lz4k="false"
+              ;;
+          esac
+
+          # susfs4ksu 目前只到 gki-android16-6.12，没有 gki-android17-6.18 分支。
+          # 6.18 打开 SUSFS 必然 clone 失败并留下半成品，这里对所有 source_mode 直接拒绝。
+          if [ "${{ inputs.android_version }}" = "android17" ] && [ "${{ inputs.kernel_version }}" = "6.18" ] \
+            && [ "${{ inputs.enable_susfs }}" = "true" ]; then
+            echo "::error::android17/6.18 暂不支持 SUSFS：susfs4ksu 尚未提供 gki-android17-6.18 分支，请关闭 SUSFS 后重试。"
+            exit 1
+          fi
+
+          if [ "$effective_zram_legacy_lz4k" = "false" ]; then
             if [ "$effective_zram_full_algo" = "true" ]; then
-              echo "::warning::Android16/6.12 会跳过 legacy LZ4K/LZ4KD/LZ4K_OPLUS 补丁栈，仅保留内核原生支持的 ZRAM 算法。"
+              echo "::warning::${{ inputs.android_version }}/${{ inputs.kernel_version }} 会跳过 legacy LZ4K/LZ4KD/LZ4K_OPLUS 补丁栈，仅保留内核原生支持的 ZRAM 算法。"
             fi
             if [ -n "$effective_zram_extra_algos" ]; then
               filtered_algos="$(python3 -c 'import sys; blocked={\"lz4k\",\"lz4kd\",\"lz4k_oplus\"}; print(\",\".join(item.strip() for item in sys.argv[1].split(\",\") if item.strip() and item.strip().lower() not in blocked))' "$effective_zram_extra_algos")"
               if [ "$filtered_algos" != "$effective_zram_extra_algos" ]; then
-                echo "::warning::Android16/6.12 不支持 legacy LZ4K/LZ4KD/LZ4K_OPLUS，已自动从自定义算法列表移除。"
+                echo "::warning::${{ inputs.android_version }}/${{ inputs.kernel_version }} 不支持 legacy LZ4K/LZ4KD/LZ4K_OPLUS，已自动从自定义算法列表移除。"
               fi
               effective_zram_extra_algos="$filtered_algos"
             fi
@@ -272,10 +285,10 @@ jobs:
           combo="${android_version}-${kernel_version}"
 
           case "$combo" in
-            android12-5.10|android13-5.15|android14-6.1|android15-6.6|android16-6.12) ;;
+            android12-5.10|android13-5.15|android14-6.1|android15-6.6|android16-6.12|android17-6.18) ;;
             *)
               echo "::error::不支持的 Android/内核组合: ${android_version}/${kernel_version}"
-              echo "::error::当前工作流支持: android12/5.10, android13/5.15, android14/6.1, android15/6.6, android16/6.12"
+              echo "::error::当前工作流支持: android12/5.10, android13/5.15, android14/6.1, android15/6.6, android16/6.12, android17/6.18"
               exit 1
               ;;
           esac
@@ -419,6 +432,9 @@ jobs:
           android16 6.12 38 2025-09
           android16 6.12 58 2025-12
           android16 6.12 69 2026-03
+          android17 6.18 20 2026-04
+          android17 6.18 21 2026-06
+          android17 6.18 32 2026-09
           EOF
           )
 
@@ -485,11 +501,11 @@ jobs:
           import os, re
           if not re.fullmatch(r"(?:\d{4}-(0[1-9]|1[0-2])|lts)", os.environ["SOURCE_PATCH_LEVEL"]):
               raise SystemExit("os_patch_level must use YYYY-MM or lts")
-          if os.environ["SOURCE_KERNEL_VERSION"] not in {"5.10", "5.15", "6.1", "6.6", "6.12"}:
+          if os.environ["SOURCE_KERNEL_VERSION"] not in {"5.10", "5.15", "6.1", "6.6", "6.12", "6.18"}:
               raise SystemExit("unsupported custom source kernel line")
           expected = {
               "5.10": "android12", "5.15": "android13", "6.1": "android14",
-              "6.6": "android15", "6.12": "android16",
+              "6.6": "android15", "6.12": "android16", "6.18": "android17",
           }[os.environ["SOURCE_KERNEL_VERSION"]]
           if os.environ["SOURCE_ANDROID_VERSION"] != expected:
               raise SystemExit("custom source Android/kernel mapping mismatch")
@@ -2700,8 +2716,9 @@ jobs:
               fi
             fi
 
-            # Android 16 - 6.12 修复
-            if [[ "$ABK_ANDROID_VERSION" == "android16" && "$ABK_KERNEL_VERSION" == "6.12" ]]; then
+            # Android 16 - 6.12 / Android 17 - 6.18 修复
+            if { [[ "$ABK_ANDROID_VERSION" == "android16" && "$ABK_KERNEL_VERSION" == "6.12" ]] || \
+                 [[ "$ABK_ANDROID_VERSION" == "android17" && "$ABK_KERNEL_VERSION" == "6.18" ]]; }; then
               # 修复 setuid_hook.c 重复定义
               SETUID_HOOK="$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"
               if [ -f "$SETUID_HOOK" ]; then
@@ -3100,18 +3117,27 @@ jobs:
             }
           }
 
-          # Android 16/6.12 已带原生 ntsync.c 与 UAPI；基础补丁是新增文件式补丁，
+          # Android 16/6.12 与 Android 17/6.18 已带原生 ntsync.c 与 UAPI；基础补丁是新增文件式补丁，
           # 对原生源码既不能正向应用，也不能用反向 dry-run 判定为已应用。
-          if [[ "$ABK_ANDROID_VERSION" != "android16" || "$ABK_KERNEL_VERSION" != "6.12" ]]; then
+          NATIVE_NTSYNC="false"
+          if [[ "$ABK_ANDROID_VERSION" == "android16" && "$ABK_KERNEL_VERSION" == "6.12" ]] \
+            || [[ "$ABK_ANDROID_VERSION" == "android17" && "$ABK_KERNEL_VERSION" == "6.18" ]]; then
+            NATIVE_NTSYNC="true"
+          fi
+
+          if [ "$NATIVE_NTSYNC" != "true" ]; then
             apply_ntsync_patch "$BASE_PATCH"
           elif [ -f "$NTSYNC_SOURCE" ] && [ -f include/uapi/linux/ntsync.h ]; then
-            echo "NTsync 基础源码已由 android16-6.12 内核提供"
+            echo "NTsync 基础源码已由 ${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION} 内核提供"
           else
-            echo "::error::android16-6.12 内核缺少原生 NTsync 源码或 UAPI"
+            echo "::error::${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION} 内核缺少原生 NTsync 源码或 UAPI"
             exit 1
           fi
           if [[ "$ABK_ANDROID_VERSION" == "android12" && "$ABK_KERNEL_VERSION" == "5.10" ]]; then
             apply_android12_ntsync_compat "$PATCH_FILE"
+          elif [ "$NATIVE_NTSYNC" = "true" ] && [ ! -f "$PATCH_FILE" ]; then
+            # kernel_patches 仓的 ntsync compat 只到 android16-6.12；6.18 先依赖内核原生实现。
+            echo "::warning::未找到 ${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION} 的 NTsync 兼容补丁 ($(basename "$PATCH_FILE"))，按内核原生实现继续。"
           else
             apply_ntsync_patch "$PATCH_FILE"
           fi
@@ -3294,7 +3320,7 @@ jobs:
           }
 
           case "$KERNEL_VER" in
-            6.12)
+            6.12|6.18)
               PATCH_FILE="$VIRTUALIZATION_SUPPORT_PATCHES/kernel-6.12/001.GKI-6.12-or-above-fix_sysvipc_kabi.patch"
               if ! try_apply_patch "$PATCH_FILE"; then
                 apply_sysvipc_612_plus_compat
@@ -3329,10 +3355,10 @@ jobs:
             fi
           fi
 
-          # Android 16 / 6.12 的 rust_binder.ko 在启用 IPC_NS 后会引用
+          # Android 16 / 6.12 与 Android 17 / 6.18 的 rust_binder.ko 在启用 IPC_NS 后会引用
           # init_ipc_ns 与 put_ipc_ns，但当前 AOSP common 分支尚未导出这两个符号。
           # 这里补齐导出，避免 modpost 因 undefined symbol 失败。
-          if [ "$KERNEL_VER" = "6.12" ]; then
+          if [ "$KERNEL_VER" = "6.12" ] || [ "$KERNEL_VER" = "6.18" ]; then
             if [ -f "ipc/msgutil.c" ] && ! grep -qF 'EXPORT_SYMBOL(init_ipc_ns);' "ipc/msgutil.c"; then
               sed -i '/^struct msg_msgseg {/i EXPORT_SYMBOL(init_ipc_ns);' "ipc/msgutil.c"
               echo "已为 init_ipc_ns 补充符号导出"
@@ -3463,7 +3489,7 @@ jobs:
               fi
             done
           else
-            echo "6.12 检测到新式 zram backend，跳过 legacy LZ4K/LZ4KD/LZ4K_OPLUS 补丁栈。"
+            echo "${{ inputs.kernel_version }} 检测到新式 zram backend，跳过 legacy LZ4K/LZ4KD/LZ4K_OPLUS 补丁栈。"
           fi
 
           if [ "${EFFECTIVE_ZRAM_USE_OPTIONAL_ALGO:-false}" = "true" ]; then
@@ -3602,7 +3628,7 @@ jobs:
               "zstd")       set_config_value CONFIG_ZRAM_BACKEND_ZSTD y ;;
               "zstdp")      set_config_value CONFIG_ZRAM_BACKEND_ZSTDP y; enable_zstdp_base ;;
               "lz4k"|"lz4k_oplus"|"lz4kd")
-                echo "::warning::${algo} 暂不支持 6.12 新式 zram backend，跳过"
+                echo "::warning::${algo} 暂不支持新式 zram backend（6.12/6.18），跳过"
                 ;;
               *)
                 echo "::warning::未知的 ZRAM 算法: $algo，跳过"
@@ -3622,7 +3648,7 @@ jobs:
           fi
 
           if grep -q "CONFIG_ZSMALLOC=y" "$CONFIG_FILE" && grep -q "CONFIG_ZRAM=y" "$CONFIG_FILE"; then
-            if [ "${{ inputs.kernel_version }}" != "6.12" ]; then
+            if [ "${{ inputs.kernel_version }}" != "6.12" ] && [ "${{ inputs.kernel_version }}" != "6.18" ]; then
               while IFS= read -r line; do
                 case "$line" in
                   ''|'#'*) continue ;;
@@ -3637,7 +3663,7 @@ jobs:
           # ---- ZRAM 完整算法支持 ----
           if [ "${EFFECTIVE_ZRAM_FULL_ALGO:-false}" = "true" ]; then
             echo "启用 ZRAM 完整算法支持..."
-            if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+            if [ "${{ inputs.kernel_version }}" = "6.12" ] || [ "${{ inputs.kernel_version }}" = "6.18" ]; then
               enable_modern_full_algos
             else
               enable_legacy_full_algos
@@ -3648,7 +3674,7 @@ jobs:
             IFS=',' read -ra ALGOS <<< "$EFFECTIVE_ZRAM_EXTRA_ALGOS"
             for raw_algo in "${ALGOS[@]}"; do
               algo=$(echo "$raw_algo" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
-              if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+              if [ "${{ inputs.kernel_version }}" = "6.12" ] || [ "${{ inputs.kernel_version }}" = "6.18" ]; then
                 enable_modern_algo "$algo"
               else
                 enable_legacy_algo "$algo"
@@ -4112,6 +4138,8 @@ jobs:
               "android14-6.1")  KMI_TAG="android14-11" ;;
               "android15-6.6")  KMI_TAG="android15-8" ;;
               "android16-6.12") KMI_TAG="android16-5" ;;
+              # AOSP android17-6.18 的 bazel/constants.scl 里 KMI_GENERATION=5，故为 android17-5。
+              "android17-6.18") KMI_TAG="android17-5" ;;
               *) KMI_TAG="${{ inputs.android_version }}" ;;
             esac
 
@@ -5774,8 +5802,8 @@ jobs:
               print("Official SUSFS 源码兼容修复无需修改。")
           PY
 
-      - name: 修复 Official SUSFS 6.1-6.12 SELinux 导出
-        if: inputs.ksu_variant == 'Official' && inputs.enable_susfs && (inputs.kernel_version == '6.1' || inputs.kernel_version == '6.6' || inputs.kernel_version == '6.12')
+      - name: 修复 Official SUSFS 6.1-6.18 SELinux 导出
+        if: inputs.ksu_variant == 'Official' && inputs.enable_susfs && (inputs.kernel_version == '6.1' || inputs.kernel_version == '6.6' || inputs.kernel_version == '6.12' || inputs.kernel_version == '6.18')
         env:
           BASH_ENV: ${{ inputs.source_mode == 'custom_git' && format('{0}/.github/scripts/custom-source-feature-env.sh', github.workspace) || '' }}
           ABK_FEATURE_ID: susfs
@@ -5942,13 +5970,13 @@ jobs:
           original = text
 
           text = ensure_official_selinux_hide_exports(text, path)
-          validate_official_selinux_hide_exports(text, path, "Official 6.1-6.12 SELinux 导出")
+          validate_official_selinux_hide_exports(text, path, "Official 6.1-6.18 SELinux 导出")
 
           if text != original:
               path.write_text(text)
-              print(f"已修复 {path} 的 Official 6.1-6.12 SELinux 导出")
+              print(f"已修复 {path} 的 Official 6.1-6.18 SELinux 导出")
           else:
-              print(f"{path} 的 Official 6.1-6.12 SELinux 导出已满足要求")
+              print(f"{path} 的 Official 6.1-6.18 SELinux 导出已满足要求")
           PY
 
       - name: 补齐 SukiSU SUSFS 内联 hook 符号
@@ -6170,12 +6198,12 @@ jobs:
             fi
           fi
 
-      - name: 修复 SukiSU/BakaSU android16-6.12 源码兼容
-        if: (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'BakaSU') && inputs.android_version == 'android16' && inputs.kernel_version == '6.12'
+      - name: 修复 SukiSU/BakaSU android16-6.12 / android17-6.18 源码兼容
+        if: (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'BakaSU') && ((inputs.android_version == 'android16' && inputs.kernel_version == '6.12') || (inputs.android_version == 'android17' && inputs.kernel_version == '6.18'))
         env:
           BASH_ENV: ${{ inputs.source_mode == 'custom_git' && format('{0}/.github/scripts/custom-source-feature-env.sh', github.workspace) || '' }}
           ABK_FEATURE_ID: kernelsu
-          ABK_FEATURE_FAILURE_MESSAGE: "KernelSU android16 compatibility integration failed"
+          ABK_FEATURE_FAILURE_MESSAGE: "KernelSU android16/android17 compatibility integration failed"
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           set -euo pipefail
@@ -6210,7 +6238,7 @@ jobs:
                   if line in text:
                       super_access_c.write_text(text.replace(line, "", 1))
                       changed = True
-                      print("已移除 android16-6.12 不存在的 netlink_kernel_cfg.cb_mutex 成员探测")
+                      print("已移除 android16-6.12/android17-6.18 不存在的 netlink_kernel_cfg.cb_mutex 成员探测")
 
           lsm_hooks_h = Path("common/include/linux/lsm_hooks.h")
           lsm_hook_c = ksu_dir / "hook/lsm_hook.c"
@@ -6235,7 +6263,7 @@ jobs:
                       )
                       lsmid_block = "\n".join([
                           "",
-                          "/* ABK: android16-6.12 security_add_hooks() expects struct lsm_id. */",
+                          "/* ABK: android16-6.12/android17-6.18 security_add_hooks() expects struct lsm_id. */",
                           "#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)",
                           "static const struct lsm_id ksu_lsmid = {",
                           '    .name = "ksu",',
@@ -6252,10 +6280,10 @@ jobs:
                       text = text.replace(old_block, new_block, 1)
                       lsm_hook_c.write_text(text)
                       changed = True
-                      print("已适配 android16-6.12 security_add_hooks() 的 struct lsm_id 参数")
+                      print("已适配 android16-6.12/android17-6.18 security_add_hooks() 的 struct lsm_id 参数")
 
           if not changed:
-              print("SukiSU/BakaSU android16-6.12 专项兼容修复无需修改。")
+              print("SukiSU/BakaSU android16-6.12/android17-6.18 专项兼容修复无需修改。")
           PY
 
       - name: 校验 ABK 管理器桥接
@@ -6621,7 +6649,7 @@ jobs:
                 FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
               fi
               LTO_FLAG="--lto=thin"
-              if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+              if [ "${{ inputs.kernel_version }}" = "6.12" ] || [ "${{ inputs.kernel_version }}" = "6.18" ]; then
                 LTO_FLAG="--lto=none"
               fi
               BAZEL_DISK_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/bazel-disk"
@@ -6654,7 +6682,7 @@ jobs:
                 TARGET_PATH="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
               fi
               ;;
-            "android14"|"android15"|"android16")
+            "android14"|"android15"|"android16"|"android17")
               TARGET_PATH="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64/"
               ;;
           esac
@@ -6746,7 +6774,7 @@ jobs:
           cp ./boot-lz4.img ../${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-boot-lz4.img
 
       - name: 构建 Boot 镜像 (Android 13+)
-        if: inputs.source_mode != 'custom_git' && (inputs.android_version == 'android13' || inputs.android_version == 'android14' || inputs.android_version == 'android15' || inputs.android_version == 'android16')
+        if: inputs.source_mode != 'custom_git' && (inputs.android_version == 'android13' || inputs.android_version == 'android14' || inputs.android_version == 'android15' || inputs.android_version == 'android16' || inputs.android_version == 'android17')
         working-directory: bootimgs
         run: |
           gzip -n -k -f -9 ./Image > ./Image.gz

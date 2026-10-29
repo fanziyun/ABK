@@ -240,6 +240,7 @@
     <string name="build_oneplus_proxy_optimization">启用代理优化</string>
     <string name="build_oneplus_proxy_mtk_disabled">MTK 分支已强制关闭代理优化。</string>
     <string name="build_oneplus_susfs_unsupported">当前 OnePlus KMI 没有可用的 SUSFS 上游分支；android12/5.10 和 android13/5.15 会自动关闭。</string>
+    <string name="build_susfs_kernel_unsupported">当前内核线没有可用的 SUSFS 上游分支（susfs4ksu 最高只到 android16/6.12）；android17/6.18 会自动关闭。</string>
     <string name="build_oneplus_unicode_bypass">启用 Unicode 零宽绕过修复</string>
     <string name="build_oneplus_proxy_short">代理优化</string>
     <string name="build_oneplus_unicode_short">Unicode 绕过</string>

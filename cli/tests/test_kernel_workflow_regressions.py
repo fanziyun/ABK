@@ -186,9 +186,18 @@ class KernelWorkflowRegressionTests(unittest.TestCase):
         self.assertIn("#endif // #ifdef CONFIG_KSU_SUSFS", block)
 
     def test_android16_uses_native_ntsync_source(self):
+        # android16-6.12 与 android17-6.18 都自带原生 ntsync.c 与 UAPI，基础补丁不再应用。
         block = self._step_run_block("应用 NTsync 补丁")
-        self.assertIn('if [[ "$ABK_ANDROID_VERSION" != "android16"', block)
-        self.assertIn('NTsync 基础源码已由 android16-6.12 内核提供', block)
+        self.assertIn(
+            'if [[ "$ABK_ANDROID_VERSION" == "android16" && "$ABK_KERNEL_VERSION" == "6.12" ]]',
+            block,
+        )
+        self.assertIn(
+            '|| [[ "$ABK_ANDROID_VERSION" == "android17" && "$ABK_KERNEL_VERSION" == "6.18" ]]',
+            block,
+        )
+        self.assertIn('NATIVE_NTSYNC="true"', block)
+        self.assertIn('NTsync 基础源码已由 $', block)
 
     def test_android14_builtin_ntsync_does_not_require_symbol_export(self):
         block = self._step_run_block("应用 NTsync 补丁")

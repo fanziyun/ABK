@@ -123,15 +123,18 @@ WORKFLOWS = {
     "a14": {"file": "kernel-a14-6-1.yml", "name": t("build_target_a14"), "android": "android14", "kernel": "6.1"},
     "a15": {"file": "kernel-a15-6-6.yml", "name": t("build_target_a15"), "android": "android15", "kernel": "6.6"},
     "a16": {"file": "kernel-a16-6-12.yml", "name": t("build_target_a16"), "android": "android16", "kernel": "6.12"},
+    # Android 17 / 6.18：SUSFS 固定关闭（susfs4ksu 无 gki-android17-6.18 分支），
+    # 因此该工作流不声明 cancel_susfs 输入，CLI 侧也不再下发。
+    "a17": {"file": "kernel-a17-6-18.yml", "name": t("build_target_a17"), "android": "android17", "kernel": "6.18"},
     "custom": {"file": "kernel-custom.yml", "name": t("build_target_custom")},
     "source": {"file": "kernel-source.yml", "name": t("build_target_source")},
     "oneplus": {"file": "oneplus-custom.yml", "name": t("build_target_oneplus")},
 }
 
-ANDROID_VERSIONS = ["android12", "android13", "android14", "android15", "android16"]
-KERNEL_VERSIONS = ["5.10", "5.15", "6.1", "6.6", "6.12"]
+ANDROID_VERSIONS = ["android12", "android13", "android14", "android15", "android16", "android17"]
+KERNEL_VERSIONS = ["5.10", "5.15", "6.1", "6.6", "6.12", "6.18"]
 
-MATRIX_TARGETS = ["a12", "a13", "a14", "a15", "a16"]
+MATRIX_TARGETS = ["a12", "a13", "a14", "a15", "a16", "a17"]
 MATRIX_TARGETS_ALL = MATRIX_TARGETS + ["both", "full", "all-managers"]
 KSU_ALL_VARIANTS = ["Official", "SukiSU", "BakaSU"]
 MANAGER_VARIANT_ALIASES = {
@@ -157,6 +160,7 @@ WORKFLOW_RUNTIME_NAMES = {
     "kernel-a14-6-1.yml": "内核构建 - Android 14 (6.1)",
     "kernel-a15-6-6.yml": "内核构建 - Android 15 (6.6)",
     "kernel-a16-6-12.yml": "内核构建 - Android 16 (6.12)",
+    "kernel-a17-6-18.yml": "内核构建 - Android 17 (6.18)",
     "kernel-custom.yml": "Android 内核构建-自定义",
     "kernel-source.yml": "Android 内核构建-类 LineageOS 源码",
     "oneplus-custom.yml": "OnePlus 内核构建-自定义",
@@ -4342,7 +4346,8 @@ def normalize_virtualization_support(kernel_version, value):
     value = value or "off"
     if value == "off":
         return "off"
-    if kernel_version == "6.12":
+    # 6.12 / 6.18 工作流只暴露 off/on 两档；更早版本仍使用 678/123/345 槽位。
+    if kernel_version in ("6.12", "6.18"):
         return "on"
     if value == "on":
         return "678"
@@ -4380,9 +4385,12 @@ def _standard_build_inputs(
     kernel_version="5.10",
     *,
     supports_supp_op=False,
+    supports_susfs_toggle=True,
 ):
     kpm_enabled = bool(args.kpm) and supports_kpm(variant, args.ksu_branch)
-    susfs_enabled = _susfs_enabled(args, variant)
+    # 6.18 没有可用的 susfs4ksu 分支，SUSFS 一律强制关闭，
+    # 否则 build.yml 的版本组合校验会直接拒绝这次构建。
+    susfs_enabled = bool(_susfs_enabled(args, variant)) and kernel_version != "6.18"
     virtualization_support = normalize_virtualization_support(
         kernel_version,
         args.virt,
@@ -4395,7 +4403,6 @@ def _standard_build_inputs(
         "use_ddk": str(bool(args.ddk)).lower(),
         "use_kpm": str(kpm_enabled).lower(),
         "use_rekernel": str(bool(args.rekernel)).lower(),
-        "cancel_susfs": str(not susfs_enabled).lower(),
         "use_ntsync": str(bool(args.ntsync)).lower(),
         "use_networking": str(bool(args.networking)).lower(),
         "zram_full_algo": str(bool(args.zram_full_algo)).lower(),
@@ -4404,6 +4411,10 @@ def _standard_build_inputs(
         "build_time": args.build_time or "",
         "custom_kernel_options": getattr(args, "custom_kernel_options", ""),
     }
+    # 6.18 工作流没有 cancel_susfs 输入（SUSFS 强制关闭），下发未知输入会被
+    # workflow_dispatch 以 422 拒绝，所以只在支持 SUSFS 开关的工作流上带这一项。
+    if supports_susfs_toggle:
+        inputs["cancel_susfs"] = str(not susfs_enabled).lower()
     if virtualization_support != "off":
         inputs["virtualization_support"] = virtualization_support
     if supports_supp_op:
@@ -4850,6 +4861,8 @@ def cmd_build(args):
                         variant,
                         kernel_version,
                         supports_supp_op=target in ("a15", "a16"),
+                        # 一加 SUPP 与 SUSFS 开关都只存在于 6.x 老工作流，a17 不参与。
+                        supports_susfs_toggle=target != "a17",
                     )
                     if target == "custom":
                         inputs.update({
@@ -5536,6 +5549,7 @@ def refresh_workflow_names():
         "a14": "build_target_a14",
         "a15": "build_target_a15",
         "a16": "build_target_a16",
+        "a17": "build_target_a17",
         "custom": "build_target_custom",
         "source": "build_target_source",
         "oneplus": "build_target_oneplus",

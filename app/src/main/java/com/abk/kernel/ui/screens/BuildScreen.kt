@@ -1749,18 +1749,27 @@ fun BuildScreen(
                 if (isOnePlusBuild) {
                     val proxyAllowed = !config.onePlusCpu.startsWith("mt")
                     val onePlusSusfsSupported = KernelSupport.onePlusSusfsSupported(config.androidVersion, config.kernelVersion)
+                    // 内核线级别的 SUSFS 门控（如 6.18 没有上游分支）与一加 KMI 门控叠加生效
+                    val kernelSusfsSupported = KernelSupport.susfsSupported(config.androidVersion, config.kernelVersion)
+                    val susfsEnabled = onePlusSusfsSupported && kernelSusfsSupported
                     val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
                     val onePlusLz4kdSupported = KernelSupport.onePlusLz4kdSupported(config.kernelVersion)
                     SwitchRow(
                         stringResource(R.string.build_enable_susfs),
-                        !config.cancelSusfs && onePlusSusfsSupported,
-                        enabled = !noRootScheme && onePlusSusfsSupported && susfsSelectable
+                        !config.cancelSusfs && susfsEnabled,
+                        enabled = !noRootScheme && susfsEnabled && susfsSelectable
                     ) {
                         vm.updateBuildConfig(KernelSupport.normalize(config.copy(cancelSusfs = !it)))
                     }
-                    if (!onePlusSusfsSupported) {
+                    if (!susfsEnabled) {
                         Text(
-                            text = stringResource(R.string.build_oneplus_susfs_unsupported),
+                            text = stringResource(
+                                if (kernelSusfsSupported) {
+                                    R.string.build_oneplus_susfs_unsupported
+                                } else {
+                                    R.string.build_susfs_kernel_unsupported
+                                }
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1807,8 +1816,21 @@ fun BuildScreen(
                     }
                 } else {
                     val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
-                    SwitchRow(stringResource(R.string.build_enable_susfs), !config.cancelSusfs, enabled = !noRootScheme && susfsSelectable) {
+                    // 6.18 起 GKI 线暂无 SUSFS 上游分支：开关置灰不可点，并给出说明文案
+                    val susfsSupported = KernelSupport.susfsSupported(config.androidVersion, config.kernelVersion)
+                    SwitchRow(
+                        stringResource(R.string.build_enable_susfs),
+                        !config.cancelSusfs && susfsSupported,
+                        enabled = !noRootScheme && susfsSupported && susfsSelectable
+                    ) {
                         vm.updateBuildConfig(KernelSupport.normalize(config.copy(cancelSusfs = !it)))
+                    }
+                    if (!susfsSupported) {
+                        Text(
+                            text = stringResource(R.string.build_susfs_kernel_unsupported),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     SwitchRow(stringResource(R.string.build_enable_zram), config.useZram) {
                         vm.updateBuildConfig(config.copy(useZram = it))
