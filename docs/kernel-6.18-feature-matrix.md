@@ -22,7 +22,7 @@
 | ZRAM 自定义算法 | `zram_extra_algos` | ✅（受限） | lzo/lz4/lz4hc/deflate/842/zstd 可用；lz4k、lz4kd、lz4k_oplus、zstdp 会在解析阶段被剔除并 warning |
 | legacy LZ4K 补丁栈 | `zram_full_algo`/`zram_extra_algos` 内的 lz4k 系列 | ❌ | `SukiSU_patch` 的 `other/zram/zram_patch` 只有 5.10/5.15/6.1/6.6，6.12 与 6.18 都要跳过 |
 | zstdp 可选后端 | 已废弃 | ❌ 不参与构建 | `zstdp_wrapper.c` 的 scomp 回调签名与 6.12+ crypto API 不兼容；A/B 实测 6.12.23/38/58 全部同因失败，与 6.18 无关。工作流现在无条件把 `zstdp` 从算法列表移除并 warning，`setup_zstdp.sh` 不再触发 |
-| BBG 防格机 | `use_bbg` | ❌（6.18） | CI 实测：`security/baseband-guard/blkdev_helper.c:107` 调用 `blkdev_get_no_open()`，该 API 在 6.13 已被移除；6.12 同参可编过 → 上游 BBG 需适配 6.13+ |
+| BBG 防格机 | `use_bbg` | ❌（6.18，暂不处理） | AOSP `android17-6.18` 的 `include/linux/blkdev.h` 已删除 `blkdev_get_no_open`/`blkdev_put_no_open`（6.12 仍在），而上游 Baseband-guard 的 `blkdev_helper.c:107/118`（AOSP `bd_meta_info` 分支）仍调用旧 API；上游 6.18 的 CI 覆盖的是 mainline LTS 的另一分支，不覆盖 AOSP GKI → 判定为上游缺口，本仓库暂不启用 |
 | DDK LSM | `use_ddk` | ✅（实测） | `ddk/setup.sh` 在 6.18 上补丁全过，`CONFIG_XINGGUANG_DDK=y` 内建编译通过，三个子版本均成功 |
 | NTsync | `use_ntsync` | ✅（带告警） | 6.18 内核自带 `drivers/misc/ntsync.c` 与 UAPI，跳过 base 补丁；`kernel_patches` 没有 `ntsync_compat_android17-6.18.patch`，缺失时给 `::warning` 并按原生实现继续 |
 | Networking 增强（IPSet + BBR） | `use_networking` | ✅（实测） | IP_SET/IP6_NAT defconfig 注入 + bbrv3 补丁在 6.18 上应用与编译均通过 |
