@@ -4118,8 +4118,43 @@ jobs:
           if [ -f "build/build.sh" ]; then
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
-            sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' ./common/BUILD.bazel
-            sed -i '/kmi_symbol_list_strict_mode/d' ./common/BUILD.bazel
+            # 6.18 的 BUILD.bazel 把 kmi_symbol_list_strict_mode 写成多行 select({...})，
+            # 直接按行 sed 删除会留下悬空括号，导致 bazel 解析失败；这里按括号配对整块移除。
+            python3 - <<'PY'
+            from pathlib import Path
+
+            path = Path("common/BUILD.bazel")
+            if not path.exists():
+                print("未找到 common/BUILD.bazel，跳过属性清理")
+            else:
+                lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+                kept, removed, i = [], [], 0
+                while i < len(lines):
+                    line = lines[i]
+                    stripped = line.strip()
+                    if stripped.startswith("kmi_symbol_list_strict_mode"):
+                        depth = line.count("(") - line.count(")")
+                        j = i
+                        while depth > 0 and j + 1 < len(lines):
+                            j += 1
+                            depth += lines[j].count("(") - lines[j].count(")")
+                        removed.append(f"kmi_symbol_list_strict_mode(L{i + 1}-{j + 1})")
+                        i = j + 1
+                        continue
+                    if (
+                        stripped.startswith('"protected_exports_list"')
+                        and stripped.endswith(",")
+                        and not stripped.endswith(("[", "{", "("))
+                    ):
+                        removed.append(f"protected_exports_list(L{i + 1})")
+                        i += 1
+                        continue
+                    kept.append(line)
+                    i += 1
+                if removed:
+                    path.write_text("".join(kept), encoding="utf-8")
+                print("BUILD.bazel 属性清理:", ", ".join(removed) if removed else "无需修改")
+            PY
             rm -rf ./common/android/abi_gki_protected_exports_*
             sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
           fi
