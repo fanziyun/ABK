@@ -22,7 +22,7 @@
 | ZRAM 自定义算法 | `zram_extra_algos` | ✅（受限） | lzo/lz4/lz4hc/deflate/842/zstd 可用；lz4k、lz4kd、lz4k_oplus、zstdp 会在解析阶段被剔除并 warning |
 | legacy LZ4K 补丁栈 | `zram_full_algo`/`zram_extra_algos` 内的 lz4k 系列 | ❌ | `SukiSU_patch` 的 `other/zram/zram_patch` 只有 5.10/5.15/6.1/6.6，6.12 与 6.18 都要跳过 |
 | zstdp 可选后端 | 已废弃 | ❌ 不参与构建 | `zstdp_wrapper.c` 的 scomp 回调签名与 6.12+ crypto API 不兼容；A/B 实测 6.12.23/38/58 全部同因失败，与 6.18 无关。工作流现在无条件把 `zstdp` 从算法列表移除并 warning，`setup_zstdp.sh` 不再触发 |
-| BBG 防格机 | `use_bbg` | ⚠️ | 拉外部 `Baseband-guard/setup.sh`，legacy host header 修复只对 5.10/5.15 生效，6.18 需实测 |
+| BBG 防格机 | `use_bbg` | ❌（6.18） | CI 实测：`security/baseband-guard/blkdev_helper.c:107` 调用 `blkdev_get_no_open()`，该 API 在 6.13 已被移除；6.12 同参可编过 → 上游 BBG 需适配 6.13+ |
 | DDK LSM | `use_ddk` | ⚠️ | 仓库内 `ddk/patches/xingguang-ddk` 无 6.18 版本目录，需实测 Kconfig/LSM 接口 |
 | NTsync | `use_ntsync` | ✅（带告警） | 6.18 内核自带 `drivers/misc/ntsync.c` 与 UAPI，跳过 base 补丁；`kernel_patches` 没有 `ntsync_compat_android17-6.18.patch`，缺失时给 `::warning` 并按原生实现继续 |
 | Networking 增强（IPSet + BBR） | `use_networking` | ⚠️ | ipset/bbrv3 补丁上下文对 6.18 未验证 |
@@ -48,6 +48,16 @@
 3. ZRAM：刷入后 `cat /sys/block/zram0/comp_algorithm`，方括号内为当前算法，列表应含已启用的 backend。
 4. KPM：patch 成功后 `Image` 被 `oImage` 替换，日志无 `KPM image patch failed`。
 5. SUSFS：a17 工作流里没有该开关；若手工调 `build.yml` 传 `enable_susfs=true`，应在校验步骤即失败（预期行为）。
+
+## CI 实测记录（2026-10-29）
+
+| 轮次 | 对象 | 结果 | 结论 |
+|---|---|---|---|
+| 1 | 6.18 全功能 | 失败于「构建信息摘要」 | zram 算法过滤命令转义写错 → 已修 |
+| 2 | 6.18 全功能 + 基线 | 失败于编译期 bazel 解析 | 6.18 把 `kmi_symbol_list_strict_mode` 写成多行 select，按行 sed 砍首行 → 已改为整块删除 |
+| 3 | 6.12 对照（同参） | 三个子版本全失败 | `zstdp_wrapper.c` scomp 回调类型不兼容 → zstdp 判定为废弃，已从构建剔除 |
+| 4 | 6.18 单版本 | 失败于 BBG | `blkdev_get_no_open` 在 6.13 被移除 → BBG 在 6.18 不可用 |
+| 5 | 6.18 单版本（BBG 关） | 失败于模块 staging | 内建 zram 后 kleaf 仍要求 zram.ko；6.18 的模块清单在 `bazel/modules_private.bzl`，且脚本需按 `$KERNEL_ROOT` 定位 → 已修 |
 
 ## 已知缺口 / 后续待办
 
