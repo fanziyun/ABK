@@ -4444,8 +4444,6 @@ def _source_build_inputs(args, variant):
             profile,
             virtualization_support,
         )
-        # 6.18 没有 SUSFS 上游分支，BBG 也依赖 6.13 已删除的 blkdev API。
-        # 服务端会按 preflight 解析出的内核线再关一次，这里提前对齐，避免下发必失败组合。
         if profile == "6.18":
             cancel_susfs = True
             use_bbg = False
@@ -5034,7 +5032,6 @@ def cmd_build(args):
             print(f"\n[{index}/{len(plans)}] ", end="")
         print(t("triggering_name", name=plan["name"]))
         plan_kpm_enabled = plan["inputs"].get("use_kpm", str(bool(args.kpm)).lower()) == "true"
-        # a17 工作流没有 SUSFS/BBG 开关，工作流内已固定关闭，报告按实际下发值展示。
         plan_bbg_enabled = bool(args.bbg) and plan.get("target") != "a17"
         if "enable_susfs" in plan["inputs"]:
             plan_susfs_enabled = (

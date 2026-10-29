@@ -193,8 +193,6 @@ jobs:
       version: ${{ inputs.version || '' }}
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
-      # android17/6.18 没有 BBG 与一加 8E 的上游支持，和 SUSFS 一样在入口自动关闭，
-      # 避免默认值或残留配置把 6.18 构建打到编译期失败。
       use_bbg: ${{ inputs.use_bbg && !(inputs.android_version == 'android17' && inputs.kernel_version == '6.18') }}
       use_ddk: ${{ inputs.use_ddk }}
       use_ntsync: ${{ inputs.use_ntsync || false }}

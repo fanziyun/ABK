@@ -295,9 +295,6 @@ jobs:
                   "kernel_version": kernel_version,
                   "sub_level": sub_level,
                   "os_patch_level": os_patch_level,
-                  # android17-6.18 缺少 SUSFS 上游分支、6.13 起删除了 BBG 依赖的
-                  # blkdev_get_no_open/blkdev_put_no_open、一加 8E 补丁也不覆盖 6.18。
-                  # 矩阵按行关闭这三个开关，否则默认参数会把新增行打成必失败。
                   "line_supported": not (
                       android_version == "android17" and kernel_version == "6.18"
                   ),

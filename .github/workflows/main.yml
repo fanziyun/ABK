@@ -313,8 +313,6 @@ jobs:
       version: ${{ inputs.version }}
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
-      # 6.18 不支持 BBG（依赖 6.13 已删除的 blkdev API），按内核线强制关闭，
-      # 避免上游开关把整次 build_all 的 a17 任务打红。
       use_bbg: false
       use_ddk: ${{ inputs.use_ddk }}
       use_ntsync: ${{ inputs.use_ntsync || false }}

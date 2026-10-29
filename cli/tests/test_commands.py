@@ -515,7 +515,6 @@ class CommandBehaviorTests(unittest.TestCase):
             if line.strip().startswith("inputs=")
         )
         inputs = json.loads(inputs_line)
-        # 6.18 的 SUSFS/BBG 在服务端会被拦截，CLI 必须提前对齐，避免下发必失败组合。
         self.assertEqual("true", inputs["cancel_susfs"])
         self.assertEqual("false", inputs["use_bbg"])
 

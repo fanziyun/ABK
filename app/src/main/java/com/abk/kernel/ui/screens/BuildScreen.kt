@@ -1748,8 +1748,6 @@ fun BuildScreen(
                 )
                 if (isOnePlusBuild) {
                     val proxyAllowed = !config.onePlusCpu.startsWith("mt")
-                    // 一加线最高只到 android16/6.12，a17 的内核线门控在这里恒为 true；
-                    // 内核线级别的 SUSFS 门控只存在于下方的 GKI 分支。
                     val onePlusSusfsSupported = KernelSupport.onePlusSusfsSupported(config.androidVersion, config.kernelVersion)
                     val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
                     val onePlusLz4kdSupported = KernelSupport.onePlusLz4kdSupported(config.kernelVersion)
@@ -1811,8 +1809,6 @@ fun BuildScreen(
                     val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
                     // 6.18 起 GKI 线暂无 SUSFS 上游分支：开关置灰不可点，并给出说明文案
                     val susfsSupported = KernelSupport.susfsSupported(config.androidVersion, config.kernelVersion)
-                    // BBG 依赖 6.13 起被删除的 blkdev API，一加 8E 补丁也不覆盖 6.18，
-                    // 与 SUSFS 一样在这条线上置灰（工作流侧也会按内核线自动关闭）。
                     val bbgSupported = KernelSupport.bbgSupported(config.androidVersion, config.kernelVersion)
                     val suppOpSupported = KernelSupport.suppOpSupported(config.androidVersion, config.kernelVersion)
                     SwitchRow(

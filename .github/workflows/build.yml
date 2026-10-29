@@ -208,8 +208,6 @@ jobs:
             exit 1
           fi
 
-          # 6.18 已删除 blkdev_get_no_open/blkdev_put_no_open，上游 Baseband-guard 仍调用旧 API，
-          # BBG 在 6.18 上必然编译失败；入口工作流会按内核线自动关闭，直连 build.yml 打开则直接拒绝。
           if [ "${{ inputs.android_version }}" = "android17" ] && [ "${{ inputs.kernel_version }}" = "6.18" ] \
             && [ "${{ inputs.use_bbg }}" = "true" ]; then
             echo "::error::android17/6.18 暂不支持 BBG：上游 Baseband-guard 仍使用 6.18 已删除的 blkdev_get_no_open/blkdev_put_no_open，请关闭 BBG 后重试。"
@@ -3145,8 +3143,6 @@ jobs:
             apply_android12_ntsync_compat "$PATCH_FILE"
           elif [ "$ABK_ANDROID_VERSION" = "android17" ] && [ "$ABK_KERNEL_VERSION" = "6.18" ] \
             && [ ! -f "$PATCH_FILE" ]; then
-            # kernel_patches 仓还没有 android17-6.18 的 ntsync compat；6.18 先依赖内核原生实现。
-            # 其它原生内核线（android16-6.12）缺少兼容补丁时仍走 apply_ntsync_patch 直接报错。
             echo "::warning::未找到 ${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION} 的 NTsync 兼容补丁 ($(basename "$PATCH_FILE"))，按内核原生实现继续。"
           else
             apply_ntsync_patch "$PATCH_FILE"
@@ -3638,7 +3634,6 @@ jobs:
           set_config_value CONFIG_ZSMALLOC y
           set_config_value CONFIG_ZRAM y
 
-          # 条目形状变化时宁可让步骤失败，也不能“报告成功但什么都没删”。
           python3 - "$KERNEL_ROOT" <<'PY'
           import re
           import sys
@@ -3657,14 +3652,12 @@ jobs:
               new = text
               for entry in ENTRIES:
                   escaped = re.escape(entry)
-                  # 整行条目：允许尾随逗号、注释和空白。
                   line_pattern = re.compile(
                       rf"^[ \t]*[{QUOTES}]{escaped}[{QUOTES}][ \t]*,?[ \t]*(?:#.*)?\n?",
                       re.M,
                   )
                   new, removed_count = line_pattern.subn("", new)
                   if removed_count == 0:
-                      # 同一行里多个条目：只去掉带引号且带逗号的条目。
                       new = re.sub(rf"[{QUOTES}]{escaped}[{QUOTES}][ \t]*,", "", new)
                   if entry in new:
                       raise SystemExit(f"{rel}: 无法安全移除模块条目 {entry}")
@@ -4146,7 +4139,6 @@ jobs:
           if [ -f "build/build.sh" ]; then
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
-            # 无法安全移除的残留会直接失败，避免写出被截断的 BUILD.bazel。
           python3 - <<'PY'
           from pathlib import Path
           import re
