@@ -1807,23 +1807,14 @@ fun BuildScreen(
                     }
                 } else {
                     val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
-                    // 6.18 起 GKI 线暂无 SUSFS 上游分支：开关置灰不可点，并给出说明文案
-                    val susfsSupported = KernelSupport.susfsSupported(config.androidVersion, config.kernelVersion)
                     val bbgSupported = KernelSupport.bbgSupported(config.androidVersion, config.kernelVersion)
                     val suppOpSupported = KernelSupport.suppOpSupported(config.androidVersion, config.kernelVersion)
                     SwitchRow(
                         stringResource(R.string.build_enable_susfs),
-                        !config.cancelSusfs && susfsSupported,
-                        enabled = !noRootScheme && susfsSupported && susfsSelectable
+                        !config.cancelSusfs,
+                        enabled = !noRootScheme && susfsSelectable
                     ) {
                         vm.updateBuildConfig(KernelSupport.normalize(config.copy(cancelSusfs = !it)))
-                    }
-                    if (!susfsSupported) {
-                        Text(
-                            text = stringResource(R.string.build_susfs_kernel_unsupported),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                     SwitchRow(stringResource(R.string.build_enable_zram), config.useZram) {
                         vm.updateBuildConfig(config.copy(useZram = it))

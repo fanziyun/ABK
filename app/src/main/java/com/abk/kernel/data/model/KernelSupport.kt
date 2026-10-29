@@ -260,8 +260,6 @@ object KernelSupport {
 
     private const val ANDROID17_UNSUPPORTED_LINE = "android17/6.18"
 
-    fun susfsSupported(androidVersion: String, kernelVersion: String): Boolean =
-        "$androidVersion/$kernelVersion" != ANDROID17_UNSUPPORTED_LINE
 
     fun bbgSupported(androidVersion: String, kernelVersion: String): Boolean =
         "$androidVersion/$kernelVersion" != ANDROID17_UNSUPPORTED_LINE

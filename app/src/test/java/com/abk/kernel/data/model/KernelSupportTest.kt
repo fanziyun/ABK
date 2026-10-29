@@ -352,13 +352,11 @@ class KernelSupportTest {
     }
 
     @Test
-    fun susfsIsUnsupportedOnAndroid17Kernel618Only() {
-        // 6.18 没有 SUSFS 上游分支，必须判定为不可用
-        assertFalse(KernelSupport.susfsSupported("android17", "6.18"))
-        // 其余 GKI 线保持现状
-        assertTrue(KernelSupport.susfsSupported("android16", "6.12"))
-        assertTrue(KernelSupport.susfsSupported("android15", "6.6"))
-        assertTrue(KernelSupport.susfsSupported("android14", "6.1"))
+    fun bbgAndSuppOpAreUnsupportedOnAndroid17Kernel618Only() {
+        assertFalse(KernelSupport.bbgSupported("android17", "6.18"))
+        assertFalse(KernelSupport.suppOpSupported("android17", "6.18"))
+        assertTrue(KernelSupport.bbgSupported("android16", "6.12"))
+        assertTrue(KernelSupport.suppOpSupported("android16", "6.12"))
     }
 
     @Test
