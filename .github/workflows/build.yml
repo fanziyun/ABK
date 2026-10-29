@@ -3655,14 +3655,18 @@ jobs:
 
           # 6.18 的模块清单搬到了 common/bazel/modules_private.bzl（6.12 在 common/modules.bzl），
           # 只改 modules.bzl 会让 kleaf 仍要求 zram.ko/zsmalloc.ko，内建后 staging 直接失败。
-          python3 - <<'PY'
+          python3 - "$KERNEL_ROOT" <<'PY'
+          import os
+          import sys
           from pathlib import Path
 
+          root = Path(sys.argv[1])
           ENTRIES = ("drivers/block/zram/zram.ko", "mm/zsmalloc.ko")
-          patched = []
+          patched, skipped = [], []
           for rel in ("common/modules.bzl", "common/bazel/modules_private.bzl"):
-              path = Path(rel)
+              path = root / rel
               if not path.exists():
+                  skipped.append(rel)
                   continue
               text = path.read_text(encoding="utf-8")
               new = text
@@ -3672,7 +3676,8 @@ jobs:
               if new != text:
                   path.write_text(new, encoding="utf-8")
                   patched.append(rel)
-          print("ZRAM/ZSMALLOC 模块清单清理:", ", ".join(patched) if patched else "无匹配文件或条目，跳过")
+          print("ZRAM/ZSMALLOC 模块清单清理:", ", ".join(patched) if patched else "无条目可删")
+          print("未找到的清单文件:", ", ".join(skipped) if skipped else "无")
           PY
 
           if grep -q "CONFIG_ZSMALLOC=y" "$CONFIG_FILE" && grep -q "CONFIG_ZRAM=y" "$CONFIG_FILE"; then
