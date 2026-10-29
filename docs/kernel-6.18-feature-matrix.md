@@ -19,9 +19,9 @@
 | SUSFS | `enable_susfs` | ❌ | `susfs4ksu` 最高只有 `gki-android16-6.12`，没有 `gki-android17-6.18`；a17 工作流把 `enable_susfs` 固定为 `false`，直连 `build.yml` 打开会报错退出 |
 | ZRAM 增强 | `use_zram` | ✅ | `CONFIG_ZRAM`/`CONFIG_ZSMALLOC` 内建 + 删 `modules.bzl` 里的 zram.ko/zsmalloc.ko，与 6.12 一致 |
 | ZRAM 完整算法 | `zram_full_algo` | ✅ | 6.18 与 6.12 同为"新式 backend"，走 `CONFIG_ZRAM_BACKEND_{LZO,LZ4,LZ4HC,ZSTD,DEFLATE,842}` |
-| ZRAM 自定义算法 | `zram_extra_algos` | ✅（受限） | lzo/lz4/lz4hc/deflate/842/zstd/zstdp 可用；lz4k、lz4kd、lz4k_oplus 会在解析阶段被剔除并 warning |
+| ZRAM 自定义算法 | `zram_extra_algos` | ✅（受限） | lzo/lz4/lz4hc/deflate/842/zstd 可用；lz4k、lz4kd、lz4k_oplus、zstdp 会在解析阶段被剔除并 warning |
 | legacy LZ4K 补丁栈 | `zram_full_algo`/`zram_extra_algos` 内的 lz4k 系列 | ❌ | `SukiSU_patch` 的 `other/zram/zram_patch` 只有 5.10/5.15/6.1/6.6，6.12 与 6.18 都要跳过 |
-| zstdp 可选后端 | `zram_extra_algos` 含 `zstdp` | ⚠️ | 走 `zram/setup_zstdp.sh integrate`（`ABK_ZSTDP_UPSTREAM_TAG=v6.15`），需实测 6.18 的 crypto/zram API |
+| zstdp 可选后端 | 已废弃 | ❌ 不参与构建 | `zstdp_wrapper.c` 的 scomp 回调签名与 6.12+ crypto API 不兼容；A/B 实测 6.12.23/38/58 全部同因失败，与 6.18 无关。工作流现在无条件把 `zstdp` 从算法列表移除并 warning，`setup_zstdp.sh` 不再触发 |
 | BBG 防格机 | `use_bbg` | ⚠️ | 拉外部 `Baseband-guard/setup.sh`，legacy host header 修复只对 5.10/5.15 生效，6.18 需实测 |
 | DDK LSM | `use_ddk` | ⚠️ | 仓库内 `ddk/patches/xingguang-ddk` 无 6.18 版本目录，需实测 Kconfig/LSM 接口 |
 | NTsync | `use_ntsync` | ✅（带告警） | 6.18 内核自带 `drivers/misc/ntsync.c` 与 UAPI，跳过 base 补丁；`kernel_patches` 没有 `ntsync_compat_android17-6.18.patch`，缺失时给 `::warning` 并按原生实现继续 |
@@ -53,5 +53,6 @@
 
 - `ntsync_compat_android17-6.18.patch` 缺失：可基于 `ntsync_compat_android16-6.12.patch` 修上下文后补进 `WildKernels/kernel_patches`。
 - `susfs4ksu` 出 `gki-android17-6.18` 分支后，只需去掉 a17 的 `enable_susfs: false` 与 `build.yml` 的拦截，其余链路已就绪。
-- BBG / DDK / zstdp / Networking / KPM / Re-Kernel / 虚拟化 的 6.18 结论必须由真实 CI 回填写回本表。
+- BBG / DDK / Networking / KPM / Re-Kernel / 虚拟化 的 6.18 结论必须由真实 CI 回填写回本表。
+- zstdp 已按废弃处理，不再参与任何内核线的构建；如需复活，必须先修 `zram/zstdp/zstdp_wrapper.c` 的 scomp 回调签名。
 - 一加（oneplus）线不纳入 6.18，等有 A17 机型再评估。

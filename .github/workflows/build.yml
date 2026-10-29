@@ -222,6 +222,16 @@ jobs:
             fi
           fi
 
+          # zstdp 后端已废弃：它的 scomp 回调签名在 6.12/6.18 上都编不过，
+          # 无论内核线一律从算法列表里剔除，不再触发 setup_zstdp 集成。
+          if [ -n "$effective_zram_extra_algos" ]; then
+            if python3 -c 'import sys; algos=[item.strip().lower() for item in sys.argv[1].split(",") if item.strip()]; raise SystemExit(0 if "zstdp" in algos else 1)' "$effective_zram_extra_algos"; then
+              echo "::warning::zstdp 后端已废弃（scomp 回调与 6.12+ crypto API 不兼容），已从 ZRAM 算法列表移除。"
+              effective_zram_extra_algos="$(python3 -c 'import sys; print(",".join(item.strip() for item in sys.argv[1].split(",") if item.strip() and item.strip().lower() != "zstdp"))' "$effective_zram_extra_algos")"
+            fi
+          fi
+
+          # 兼容旧逻辑：仅当算法列表里仍有 zstdp 时才需要可选后端集成，现已禁用，恒为 false。
           if [ "$effective_use_zram" = "true" ] && [ "$effective_zram_full_algo" != "true" ] && [ -n "$effective_zram_extra_algos" ]; then
             if python3 -c 'import sys; algos=[item.strip().lower() for item in sys.argv[1].split(",") if item.strip()]; raise SystemExit(0 if "zstdp" in algos else 1)' "$effective_zram_extra_algos"; then
               effective_zram_use_optional_algo="true"
