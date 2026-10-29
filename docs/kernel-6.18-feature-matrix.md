@@ -15,20 +15,20 @@
 | 内核源码 | `android_version=android17`、`kernel_version=6.18` | ✅ | AOSP `kernel/manifest` 存在 `common-android17-6.18`、`-2026-04`(6.18.20)、`-2026-06`(6.18.21)、`-2026-09`(6.18.32)、`-lts`(6.18.37) |
 | 版本组合校验 | `sub_level` / `os_patch_level` | ✅ | `build.yml` 的 `KNOWN_KERNEL_PAIRS` 已登记 20/21/32 三条，非法组合会给出可用补丁级别 |
 | GKI Kleaf/Bazel 构建 | — | ✅ | 与 6.12 同路径，`--lto=none`（6.12/6.18 都关 LTO），产物 `bazel-bin/common/kernel_aarch64/Image` |
-| KernelSU 变体 | `kernelsu_variant` = Official / SukiSU / BakaSU | ⚠️ | 各变体仓无 6.18 专属分支，靠内核 API 兼容；`setuid_hook.c`、`security_add_hooks(struct lsm_id)`、`netlink_kernel_cfg.cb_mutex` 三处 6.12 专项修复已扩到 6.18 |
+| KernelSU 变体 | `kernelsu_variant` = Official / SukiSU / BakaSU | ✅ BakaSU（实测）/ ⚠️ Official、SukiSU（未测） | 三处 6.12 专项修复（`setuid_hook.c` 重复定义、`security_add_hooks(struct lsm_id)`、`netlink_kernel_cfg.cb_mutex`）已扩到 6.18；BakaSU Stable 三个子版本全绿 |
 | SUSFS | `enable_susfs` | ❌ | `susfs4ksu` 最高只有 `gki-android16-6.12`，没有 `gki-android17-6.18`；a17 工作流把 `enable_susfs` 固定为 `false`，直连 `build.yml` 打开会报错退出 |
-| ZRAM 增强 | `use_zram` | ✅ | `CONFIG_ZRAM`/`CONFIG_ZSMALLOC` 内建 + 删 `modules.bzl` 里的 zram.ko/zsmalloc.ko，与 6.12 一致 |
+| ZRAM 增强 | `use_zram` | ✅（实测） | `CONFIG_ZRAM`/`CONFIG_ZSMALLOC` 内建；6.18 的模块清单在 `common/bazel/modules_private.bzl`（6.12 在 `common/modules.bzl`），两处都按 `$KERNEL_ROOT` 清理 |
 | ZRAM 完整算法 | `zram_full_algo` | ✅ | 6.18 与 6.12 同为"新式 backend"，走 `CONFIG_ZRAM_BACKEND_{LZO,LZ4,LZ4HC,ZSTD,DEFLATE,842}` |
 | ZRAM 自定义算法 | `zram_extra_algos` | ✅（受限） | lzo/lz4/lz4hc/deflate/842/zstd 可用；lz4k、lz4kd、lz4k_oplus、zstdp 会在解析阶段被剔除并 warning |
 | legacy LZ4K 补丁栈 | `zram_full_algo`/`zram_extra_algos` 内的 lz4k 系列 | ❌ | `SukiSU_patch` 的 `other/zram/zram_patch` 只有 5.10/5.15/6.1/6.6，6.12 与 6.18 都要跳过 |
 | zstdp 可选后端 | 已废弃 | ❌ 不参与构建 | `zstdp_wrapper.c` 的 scomp 回调签名与 6.12+ crypto API 不兼容；A/B 实测 6.12.23/38/58 全部同因失败，与 6.18 无关。工作流现在无条件把 `zstdp` 从算法列表移除并 warning，`setup_zstdp.sh` 不再触发 |
 | BBG 防格机 | `use_bbg` | ❌（6.18） | CI 实测：`security/baseband-guard/blkdev_helper.c:107` 调用 `blkdev_get_no_open()`，该 API 在 6.13 已被移除；6.12 同参可编过 → 上游 BBG 需适配 6.13+ |
-| DDK LSM | `use_ddk` | ⚠️ | 仓库内 `ddk/patches/xingguang-ddk` 无 6.18 版本目录，需实测 Kconfig/LSM 接口 |
+| DDK LSM | `use_ddk` | ✅（实测） | `ddk/setup.sh` 在 6.18 上补丁全过，`CONFIG_XINGGUANG_DDK=y` 内建编译通过，三个子版本均成功 |
 | NTsync | `use_ntsync` | ✅（带告警） | 6.18 内核自带 `drivers/misc/ntsync.c` 与 UAPI，跳过 base 补丁；`kernel_patches` 没有 `ntsync_compat_android17-6.18.patch`，缺失时给 `::warning` 并按原生实现继续 |
-| Networking 增强（IPSet + BBR） | `use_networking` | ⚠️ | ipset/bbrv3 补丁上下文对 6.18 未验证 |
-| KPM | `use_kpm`（SukiSU/BakaSU） | ⚠️ | `SukiSU_patch/kpm/patch_linux` 直接 patch `Image`，6.18 二进制布局需实测；目标目录已加 android17 |
-| Re-Kernel | `use_rekernel` | ⚠️ | 依赖外部驱动源码，需实测 |
-| 虚拟化支持 | `virtualization_support=on` | ⚠️ | 复用 `kernel-6.12` 的 SYSVIPC kABI 补丁 + 6.12+ packed 字段 fallback；`init_ipc_ns`/`put_ipc_ns` 导出补齐也扩到 6.18 |
+| Networking 增强（IPSet + BBR） | `use_networking` | ✅（实测） | IP_SET/IP6_NAT defconfig 注入 + bbrv3 补丁在 6.18 上应用与编译均通过 |
+| KPM | `use_kpm`（SukiSU/BakaSU） | ✅（实测） | `SukiSU_patch/kpm/patch_linux` 对 6.18 Image 打补丁成功（`Image` → `oImage` 替换），BakaSU Stable 下三个子版本均通过 |
+| Re-Kernel | `use_rekernel` | ✅（实测） | 外部 Re-Kernel 源码在 6.18 上集成并编译通过 |
+| 虚拟化支持 | `virtualization_support=on` | ✅（实测） | 复用 `kernel-6.12` 的 SYSVIPC kABI 补丁 + 6.12+ packed 字段 fallback，`init_ipc_ns`/`put_ipc_ns` 导出补齐在 6.18 上编译通过 |
 | 一加 8E 支持 | `supp_op` | ❌ 不适用 | 本次只接 GKI 线：oneplus 系列工作流与一加机型清单（最高 android16/6.12）一律不动，a17 工作流也不提供 `supp_op` 开关 |
 | 自定义源码构建 | `source_mode=custom_git` + `source_kernel_version=6.18` | ✅ | 映射表已加 `6.18 -> android17`，允许 `os_patch_level=lts` |
 | Boot 镜像 / AnyKernel3 | — | ✅ | 与 6.12 同一打包链路（`boot.img`/`boot-gz.img`/`boot-lz4.img` + AVB footer） |
@@ -58,6 +58,10 @@
 | 3 | 6.12 对照（同参） | 三个子版本全失败 | `zstdp_wrapper.c` scomp 回调类型不兼容 → zstdp 判定为废弃，已从构建剔除 |
 | 4 | 6.18 单版本 | 失败于 BBG | `blkdev_get_no_open` 在 6.13 被移除 → BBG 在 6.18 不可用 |
 | 5 | 6.18 单版本（BBG 关） | 失败于模块 staging | 内建 zram 后 kleaf 仍要求 zram.ko；6.18 的模块清单在 `bazel/modules_private.bzl`，且脚本需按 `$KERNEL_ROOT` 定位 → 已修 |
+| 6 | 6.18 单版本（6.18.32 / 2026-09） | ✅ 全链路成功 | run `40861562304`：编译、KPM、Boot 镜像、Bundle、artifact 全部成功 |
+| 7 | 6.18 矩阵（20 / 21 / 32） | ✅ 三条全绿 | run `40865373665`：三个子版本的编译、KPM、打包、上传均 success |
+
+> 结论：6.18 的 GKI 链路本身是通的；当前不可用的是 SUSFS（上游无分支）、BBG（用了 6.13 已删的 blkdev API）、zstdp（已废弃）。其余功能在 BakaSU Stable + 三个子版本上实测通过。
 
 ## 已知缺口 / 后续待办
 
