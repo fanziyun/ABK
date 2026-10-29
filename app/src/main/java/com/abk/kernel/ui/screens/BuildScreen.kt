@@ -1748,28 +1748,21 @@ fun BuildScreen(
                 )
                 if (isOnePlusBuild) {
                     val proxyAllowed = !config.onePlusCpu.startsWith("mt")
+                    // 一加线最高只到 android16/6.12，a17 的内核线门控在这里恒为 true；
+                    // 内核线级别的 SUSFS 门控只存在于下方的 GKI 分支。
                     val onePlusSusfsSupported = KernelSupport.onePlusSusfsSupported(config.androidVersion, config.kernelVersion)
-                    // 内核线级别的 SUSFS 门控（如 6.18 没有上游分支）与一加 KMI 门控叠加生效
-                    val kernelSusfsSupported = KernelSupport.susfsSupported(config.androidVersion, config.kernelVersion)
-                    val susfsEnabled = onePlusSusfsSupported && kernelSusfsSupported
                     val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
                     val onePlusLz4kdSupported = KernelSupport.onePlusLz4kdSupported(config.kernelVersion)
                     SwitchRow(
                         stringResource(R.string.build_enable_susfs),
-                        !config.cancelSusfs && susfsEnabled,
-                        enabled = !noRootScheme && susfsEnabled && susfsSelectable
+                        !config.cancelSusfs && onePlusSusfsSupported,
+                        enabled = !noRootScheme && onePlusSusfsSupported && susfsSelectable
                     ) {
                         vm.updateBuildConfig(KernelSupport.normalize(config.copy(cancelSusfs = !it)))
                     }
-                    if (!susfsEnabled) {
+                    if (!onePlusSusfsSupported) {
                         Text(
-                            text = stringResource(
-                                if (kernelSusfsSupported) {
-                                    R.string.build_oneplus_susfs_unsupported
-                                } else {
-                                    R.string.build_susfs_kernel_unsupported
-                                }
-                            ),
+                            text = stringResource(R.string.build_oneplus_susfs_unsupported),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1818,6 +1811,10 @@ fun BuildScreen(
                     val susfsSelectable = KernelSupport.isSusfsSelectable(config.kernelsuVariant)
                     // 6.18 起 GKI 线暂无 SUSFS 上游分支：开关置灰不可点，并给出说明文案
                     val susfsSupported = KernelSupport.susfsSupported(config.androidVersion, config.kernelVersion)
+                    // BBG 依赖 6.13 起被删除的 blkdev API，一加 8E 补丁也不覆盖 6.18，
+                    // 与 SUSFS 一样在这条线上置灰（工作流侧也会按内核线自动关闭）。
+                    val bbgSupported = KernelSupport.bbgSupported(config.androidVersion, config.kernelVersion)
+                    val suppOpSupported = KernelSupport.suppOpSupported(config.androidVersion, config.kernelVersion)
                     SwitchRow(
                         stringResource(R.string.build_enable_susfs),
                         !config.cancelSusfs && susfsSupported,
@@ -1835,7 +1832,7 @@ fun BuildScreen(
                     SwitchRow(stringResource(R.string.build_enable_zram), config.useZram) {
                         vm.updateBuildConfig(config.copy(useZram = it))
                     }
-                    SwitchRow(stringResource(R.string.build_enable_bbg), config.useBbg) {
+                    SwitchRow(stringResource(R.string.build_enable_bbg), config.useBbg && bbgSupported, enabled = bbgSupported) {
                         vm.updateBuildConfig(config.copy(useBbg = it))
                     }
                     SwitchRow(stringResource(R.string.build_enable_ddk), config.useDdk) {
@@ -1859,7 +1856,7 @@ fun BuildScreen(
                         options = virtualizationSupportOptions,
                         onSelect = { vm.updateBuildConfig(config.copy(virtualizationSupport = it)) }
                     )
-                    SwitchRow(stringResource(R.string.build_enable_oneplus_8e), config.suppOp) {
+                    SwitchRow(stringResource(R.string.build_enable_oneplus_8e), config.suppOp && suppOpSupported, enabled = suppOpSupported) {
                         vm.updateBuildConfig(config.copy(suppOp = it))
                     }
                 }

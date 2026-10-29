@@ -362,7 +362,9 @@ class KernelSupportTest {
     }
 
     @Test
-    fun normalizeForcesCancelSusfsOnAndroid17Kernel618() {
+    fun normalizePreservesSusfsPreferenceOnAndroid17Kernel618() {
+        // 6.18 的关闭由 BuildScreen 开关门控与工作流校验负责；normalize 不能改写用户偏好，
+        // 否则从 a17 切回 6.12 会把 SUSFS 永久关掉。
         val normalized = KernelSupport.normalize(
             KernelBuildConfig(
                 androidVersion = "android17",
@@ -379,8 +381,22 @@ class KernelSupportTest {
         assertEquals("6.18", normalized.kernelVersion)
         assertEquals("32", normalized.subLevel)
         assertEquals("2026-09", normalized.osPatchLevel)
-        // 用户即使打开 SUSFS，也会被强制关闭
-        assertTrue(normalized.cancelSusfs)
+        assertFalse(normalized.cancelSusfs)
+
+        // 切回 6.12 后偏好保持不变。
+        val back = KernelSupport.normalize(
+            normalized.copy(androidVersion = "android16", kernelVersion = "6.12")
+        )
+        assertEquals("android16", back.androidVersion)
+        assertFalse(back.cancelSusfs)
+    }
+
+    @Test
+    fun android17Kernel618DisablesLineSpecificFeatures() {
+        assertFalse(KernelSupport.bbgSupported("android17", "6.18"))
+        assertFalse(KernelSupport.suppOpSupported("android17", "6.18"))
+        assertTrue(KernelSupport.bbgSupported("android16", "6.12"))
+        assertTrue(KernelSupport.suppOpSupported("android16", "6.12"))
     }
 
     @Test

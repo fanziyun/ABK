@@ -258,10 +258,19 @@ object KernelSupport {
     fun onePlusSusfsSupported(androidVersion: String, kernelVersion: String): Boolean =
         "$androidVersion/$kernelVersion" in setOf("android14/6.1", "android15/6.6", "android16/6.12")
 
-    private val susfsUnsupportedLines = setOf("android17/6.18")
+    // android17/6.18 的上游缺口：susfs4ksu 没有 gki-android17-6.18 分支；BBG 依赖
+    // 6.13 起被删除的 blkdev_get_no_open/blkdev_put_no_open；一加 8E 补丁也不覆盖 6.18。
+    // 三个开关在这条线上统一关闭，入口工作流（矩阵 / kernel-custom / kernel-source）做同样的门控。
+    private const val ANDROID17_UNSUPPORTED_LINE = "android17/6.18"
 
     fun susfsSupported(androidVersion: String, kernelVersion: String): Boolean =
-        "$androidVersion/$kernelVersion" !in susfsUnsupportedLines
+        "$androidVersion/$kernelVersion" != ANDROID17_UNSUPPORTED_LINE
+
+    fun bbgSupported(androidVersion: String, kernelVersion: String): Boolean =
+        "$androidVersion/$kernelVersion" != ANDROID17_UNSUPPORTED_LINE
+
+    fun suppOpSupported(androidVersion: String, kernelVersion: String): Boolean =
+        "$androidVersion/$kernelVersion" != ANDROID17_UNSUPPORTED_LINE
 
     fun onePlusLz4kdSupported(kernelVersion: String): Boolean =
         kernelVersion != "6.12" && kernelVersion != "6.18"
@@ -310,7 +319,6 @@ object KernelSupport {
         val gkiKpmSupported = isKpmSupported(BUILD_TARGET_GKI, ksuVariant, normalizedKsuBranch)
         val onePlusProxyAllowed = !onePlusIsMtk
         val onePlusSusfsEnabled = onePlusSusfsSupported(line.androidVersion, line.kernelVersion)
-        val susfsKernelSupported = susfsSupported(line.androidVersion, line.kernelVersion)
         val onePlusLz4kdEnabled = onePlusLz4kdSupported(line.kernelVersion)
         return config.copy(
             buildTarget = target,
@@ -344,7 +352,9 @@ object KernelSupport {
             cancelSusfs = when {
                 ksuVariant == KSU_VARIANT_NONE -> true
                 ksuVariant == KSU_VARIANT_BAKASU -> true
-                !susfsKernelSupported -> true
+                // 不要按内核线把 cancelSusfs 写成 true：那会把用户偏好永久写死，
+                // 从 a17 切回 6.12 后 SUSFS 会一直关着。a17 的关闭由 BuildScreen
+                // 的开关门控和 kernel-custom / build.yml 的工作流校验负责。
                 isOnePlus && !onePlusSusfsEnabled -> true
                 else -> config.cancelSusfs
             },
