@@ -201,8 +201,6 @@ jobs:
               ;;
           esac
 
-          # susfs4ksu 目前只到 gki-android16-6.12，没有 gki-android17-6.18 分支。
-          # 6.18 打开 SUSFS 必然 clone 失败并留下半成品，这里对所有 source_mode 直接拒绝。
           if [ "${{ inputs.android_version }}" = "android17" ] && [ "${{ inputs.kernel_version }}" = "6.18" ] \
             && [ "${{ inputs.enable_susfs }}" = "true" ]; then
             echo "::error::android17/6.18 暂不支持 SUSFS：susfs4ksu 尚未提供 gki-android17-6.18 分支，请关闭 SUSFS 后重试。"
@@ -222,8 +220,6 @@ jobs:
             fi
           fi
 
-          # zstdp 后端已废弃：它的 scomp 回调签名在 6.12/6.18 上都编不过，
-          # 无论内核线一律从算法列表里剔除，不再触发 setup_zstdp 集成。
           if [ -n "$effective_zram_extra_algos" ]; then
             if python3 -c 'import sys; algos=[item.strip().lower() for item in sys.argv[1].split(",") if item.strip()]; raise SystemExit(0 if "zstdp" in algos else 1)' "$effective_zram_extra_algos"; then
               echo "::warning::zstdp 后端已废弃（scomp 回调与 6.12+ crypto API 不兼容），已从 ZRAM 算法列表移除。"
@@ -231,7 +227,6 @@ jobs:
             fi
           fi
 
-          # 兼容旧逻辑：仅当算法列表里仍有 zstdp 时才需要可选后端集成，现已禁用，恒为 false。
           if [ "$effective_use_zram" = "true" ] && [ "$effective_zram_full_algo" != "true" ] && [ -n "$effective_zram_extra_algos" ]; then
             if python3 -c 'import sys; algos=[item.strip().lower() for item in sys.argv[1].split(",") if item.strip()]; raise SystemExit(0 if "zstdp" in algos else 1)' "$effective_zram_extra_algos"; then
               effective_zram_use_optional_algo="true"
@@ -3146,7 +3141,6 @@ jobs:
           if [[ "$ABK_ANDROID_VERSION" == "android12" && "$ABK_KERNEL_VERSION" == "5.10" ]]; then
             apply_android12_ntsync_compat "$PATCH_FILE"
           elif [ "$NATIVE_NTSYNC" = "true" ] && [ ! -f "$PATCH_FILE" ]; then
-            # kernel_patches 仓的 ntsync compat 只到 android16-6.12；6.18 先依赖内核原生实现。
             echo "::warning::未找到 ${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION} 的 NTsync 兼容补丁 ($(basename "$PATCH_FILE"))，按内核原生实现继续。"
           else
             apply_ntsync_patch "$PATCH_FILE"
@@ -3653,8 +3647,6 @@ jobs:
           set_config_value CONFIG_ZSMALLOC y
           set_config_value CONFIG_ZRAM y
 
-          # 6.18 的模块清单搬到了 common/bazel/modules_private.bzl（6.12 在 common/modules.bzl），
-          # 只改 modules.bzl 会让 kleaf 仍要求 zram.ko/zsmalloc.ko，内建后 staging 直接失败。
           python3 - "$KERNEL_ROOT" <<'PY'
           import os
           import sys
@@ -4151,8 +4143,6 @@ jobs:
           if [ -f "build/build.sh" ]; then
             sed -i 's/-dirty//' ./common/scripts/setlocalversion
           else
-            # 6.18 的 BUILD.bazel 把 kmi_symbol_list_strict_mode 写成多行 select({...})，
-            # 直接按行 sed 删除会留下悬空括号，导致 bazel 解析失败；这里按括号配对整块移除。
           python3 - <<'PY'
           from pathlib import Path
 
@@ -4206,7 +4196,6 @@ jobs:
               "android14-6.1")  KMI_TAG="android14-11" ;;
               "android15-6.6")  KMI_TAG="android15-8" ;;
               "android16-6.12") KMI_TAG="android16-5" ;;
-              # AOSP android17-6.18 的 bazel/constants.scl 里 KMI_GENERATION=5，故为 android17-5。
               "android17-6.18") KMI_TAG="android17-5" ;;
               *) KMI_TAG="${{ inputs.android_version }}" ;;
             esac
@@ -6313,7 +6302,6 @@ jobs:
                       text = text.replace(line, "", 1)
                       print("已移除 android16-6.12/android17-6.18 不存在的 netlink_kernel_cfg.cb_mutex 成员探测")
 
-              # 6.18 移除了 mnt_namespace.seq，旧 pin 没有版本门控会直接编译失败
               mnt_seq = "DEFINE_MEMBER(mnt_namespace, seq)\n"
               guarded = "#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)\n" + mnt_seq
               if mnt_seq in text and guarded not in text:

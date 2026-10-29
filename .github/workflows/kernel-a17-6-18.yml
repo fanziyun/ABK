@@ -83,9 +83,6 @@ on:
         required: false
         type: boolean
         default: false
-      # 说明：susfs4ksu 尚未提供 gki-android17-6.18 分支（最新为 gki-android16-6.12），
-      # 因此 6.18 不提供 SUSFS 开关，enable_susfs 固定为 false；
-      # build.yml 里对 android17-6.18 + enable_susfs 也会直接报错拦截。
       zram_full_algo:
         description: "启用 ZRAM 完整算法支持（legacy LZ4K/LZ4KD/LZ4K_OPLUS 会自动跳过）"
         required: false
@@ -190,8 +187,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # AOSP 目前只发布 2026-04 / 2026-06 / 2026-09 三个 android17-6.18 带补丁分支，
-          # 对应 6.18.20 / 6.18.21 / 6.18.32；lts 分支按需手动启用（6.18.37）。
           - sub_level: "20"
             os_patch_level: "2026-04"
           - sub_level: "21"

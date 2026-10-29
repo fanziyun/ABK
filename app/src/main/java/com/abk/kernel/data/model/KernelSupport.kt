@@ -258,14 +258,11 @@ object KernelSupport {
     fun onePlusSusfsSupported(androidVersion: String, kernelVersion: String): Boolean =
         "$androidVersion/$kernelVersion" in setOf("android14/6.1", "android15/6.6", "android16/6.12")
 
-    // SUSFS 上游（susfs4ksu）没有 gki-android17-6.18 分支，最高只到 gki-android16-6.12；
-    // 6.18 打开 SUSFS 会直接报错退出，所以这条线强制关闭，其余版本组合保持原有行为。
     private val susfsUnsupportedLines = setOf("android17/6.18")
 
     fun susfsSupported(androidVersion: String, kernelVersion: String): Boolean =
         "$androidVersion/$kernelVersion" !in susfsUnsupportedLines
 
-    // 6.12 起改成新式 zram backend，legacy lz4kd 补丁栈不适用；6.18 同理。
     fun onePlusLz4kdSupported(kernelVersion: String): Boolean =
         kernelVersion != "6.12" && kernelVersion != "6.18"
 

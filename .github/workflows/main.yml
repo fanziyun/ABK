@@ -304,8 +304,6 @@ jobs:
 
   # ==================== Android 17 - 6.18 构建 ====================
   build-a17-6-18:
-    # a17 不单独开 dispatch 开关：main.yml 的 dispatch 输入已达 GitHub 的 25 个上限，
-    # 单线构建请直接用 .github/workflows/kernel-a17-6-18.yml。
     if: inputs.build_all
     uses: ./.github/workflows/kernel-a17-6-18.yml
     secrets: inherit

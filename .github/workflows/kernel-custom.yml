@@ -200,8 +200,6 @@ jobs:
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel || false }}
       supp_op: ${{ inputs.supp_op || false }}
-      # android17/6.18 的 SUSFS 暂不可用（susfs4ksu 无 gki-android17-6.18 分支），这里自动关闭，
-      # 避免选了 A17 又忘记勾“禁用 SUSFS”时被 build.yml 的校验直接拦下。
       enable_susfs: ${{ !(inputs.cancel_susfs || (inputs.android_version == 'android17' && inputs.kernel_version == '6.18')) }}
       virtualization_support: ${{ inputs.virtualization_support || 'off' }}
       zram_full_algo: ${{ inputs.zram_full_algo || false }}
