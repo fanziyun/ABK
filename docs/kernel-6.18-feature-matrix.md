@@ -15,7 +15,7 @@
 | 内核源码 | `android_version=android17`、`kernel_version=6.18` | ✅ | AOSP `kernel/manifest` 存在 `common-android17-6.18`、`-2026-04`(6.18.20)、`-2026-06`(6.18.21)、`-2026-09`(6.18.32)、`-lts`(6.18.37) |
 | 版本组合校验 | `sub_level` / `os_patch_level` | ✅ | `build.yml` 的 `KNOWN_KERNEL_PAIRS` 已登记 20/21/32 三条，非法组合会给出可用补丁级别 |
 | GKI Kleaf/Bazel 构建 | — | ✅ | 与 6.12 同路径，`--lto=none`（6.12/6.18 都关 LTO），产物 `bazel-bin/common/kernel_aarch64/Image` |
-| KernelSU 变体 | `kernelsu_variant` = Official / SukiSU / BakaSU | ✅ BakaSU（实测）/ ⚠️ Official、SukiSU（未测） | 三处 6.12 专项修复（`setuid_hook.c` 重复定义、`security_add_hooks(struct lsm_id)`、`netlink_kernel_cfg.cb_mutex`）已扩到 6.18；BakaSU Stable 三个子版本全绿 |
+| KernelSU 变体 | `kernelsu_variant` = Official / SukiSU / BakaSU | ✅ 三者均已实测 | BakaSU / Official / SukiSU 在 6.18.20、21、32 上各 3/3 通过；SukiSU 需给旧 pin 补 `mnt_namespace.seq` 的 6.18 门控（workflow 已内置），Official 的 KPM 按规则关闭 |
 | SUSFS | `enable_susfs` | ❌ | `susfs4ksu` 最高只有 `gki-android16-6.12`，没有 `gki-android17-6.18`；a17 工作流把 `enable_susfs` 固定为 `false`，直连 `build.yml` 打开会报错退出 |
 | ZRAM 增强 | `use_zram` | ✅（实测） | `CONFIG_ZRAM`/`CONFIG_ZSMALLOC` 内建；6.18 的模块清单在 `common/bazel/modules_private.bzl`（6.12 在 `common/modules.bzl`），两处都按 `$KERNEL_ROOT` 清理 |
 | ZRAM 完整算法 | `zram_full_algo` | ✅ | 6.18 与 6.12 同为"新式 backend"，走 `CONFIG_ZRAM_BACKEND_{LZO,LZ4,LZ4HC,ZSTD,DEFLATE,842}` |
@@ -59,7 +59,10 @@
 | 4 | 6.18 单版本 | 失败于 BBG | `blkdev_get_no_open` 在 6.13 被移除 → BBG 在 6.18 不可用 |
 | 5 | 6.18 单版本（BBG 关） | 失败于模块 staging | 内建 zram 后 kleaf 仍要求 zram.ko；6.18 的模块清单在 `bazel/modules_private.bzl`，且脚本需按 `$KERNEL_ROOT` 定位 → 已修 |
 | 6 | 6.18 单版本（6.18.32 / 2026-09） | ✅ 全链路成功 | run `40861562304`：编译、KPM、Boot 镜像、Bundle、artifact 全部成功 |
-| 7 | 6.18 矩阵（20 / 21 / 32） | ✅ 三条全绿 | run `40865373665`：三个子版本的编译、KPM、打包、上传均 success |
+| 7 | 6.18 矩阵（20 / 21 / 32，BakaSU） | ✅ 三条全绿 | run `40865373665`：三个子版本的编译、KPM、打包、上传均 success |
+| 8 | 6.18 矩阵（Official，KPM 关） | ✅ 三条全绿 | run `40875146331` |
+| 9 | 6.18 矩阵（SukiSU，首轮） | ❌ 三条全失败 | `mnt_namespace.seq` 在 6.18 被移除，Stable pin 未适配 |
+| 10 | 6.18 矩阵（SukiSU，补门控后） | ✅ 三条全绿 | run `40881944723` |
 
 > 结论：6.18 的 GKI 链路本身是通的；当前不可用的是 SUSFS（上游无分支）、BBG（用了 6.13 已删的 blkdev API）、zstdp（已废弃）。其余功能在 BakaSU Stable + 三个子版本上实测通过。
 
