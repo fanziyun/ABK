@@ -6907,50 +6907,21 @@ jobs:
             echo "当前虚拟化补丁版本: ${VIRTUALIZATION_PATCHES_REF:-未启用}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
 
-      - name: 收集 Sailboat UX module 测试包
+      - name: 保留本地模块编译所需内核材料
         if: inputs.sailboat_ux_build_mode == 'module'
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           set -euo pipefail
-          module_dir="$(awk -F '\t' '$3 ~ /Sailboat_ColorOS/ {print $2; exit}' "$CUSTOM_EXTERNAL_MODULES_MANIFEST")"
-          [ -n "$module_dir" ] && [ -f "$module_dir/scripts/collect_ux_build.py" ] || {
-            echo '::error::Sailboat_ColorOS external module directory not found'; exit 1;
-          }
-          ko="$(find "$KERNEL_ROOT" -type f -name 'sailboat_sched_assist.ko' -print -quit)"
-          [ -n "$ko" ] || { echo '::error::module build did not produce sailboat_sched_assist.ko'; exit 1; }
-          image=""
-          for candidate in \
-            "$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist/Image" \
-            "$KERNEL_ROOT/bazel-bin/common/kernel_aarch64/Image"; do
-            if [ -f "$candidate" ]; then image="$candidate"; break; fi
+          kernel_out="out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/common"
+          for file in .config Module.symvers vmlinux System.map; do
+            [ -f "$kernel_out/$file" ] || { echo "::error::missing $kernel_out/$file"; exit 1; }
           done
-          [ -n "$image" ] || { echo '::error::kernel Image not found'; exit 1; }
-          config_file="$(find "$KERNEL_ROOT" -type f -name .config -print | sort | head -n1)"
-          symvers_file="$(find "$KERNEL_ROOT" -type f -name Module.symvers -print | sort | head -n1)"
-          vmlinux_file="$(find "$KERNEL_ROOT" -type f -name vmlinux -print | sort | head -n1)"
-          [ -n "$config_file" ] && [ -n "$symvers_file" ] && [ -n "$vmlinux_file" ] || {
-            echo '::error::target config, Module.symvers or vmlinux missing'; exit 1;
-          }
-          clang_bin="$KERNEL_ROOT/prebuilts/clang/host/linux-x86/clang-r450784e/bin"
-          [ -x "$clang_bin/clang" ] && [ -x "$clang_bin/llvm-nm" ] || {
-            echo '::error::matching r450784e clang/llvm-nm not found'; exit 1;
-          }
-          echo "UX artifact toolchain: $clang_bin"
-          "$clang_bin/clang" --version
-          proof="$RUNNER_TEMP/ux-target-proof"
-          mkdir -p "$proof/out" "$proof/dist"
-          ln -s "$config_file" "$proof/out/.config"
-          ln -s "$symvers_file" "$proof/out/Module.symvers"
-          ln -s "$vmlinux_file" "$proof/out/vmlinux"
-          ln -s "$image" "$proof/dist/Image"
-          output="$GITHUB_WORKSPACE/ux-module-artifacts"
-          python3 "$module_dir/scripts/collect_ux_build.py" \
-            --kernel-out "$proof/out" --source-dir "$module_dir" --dist-dir "$proof/dist" \
-            --clang-bin "$clang_bin" --module "$ko" --output "$output" --no-sdk
-          cp "$image" "$output/base-Image"
-          printf 'module=%s\nimage=%s\nconfig=%s\nsymvers=%s\nvmlinux=%s\n' \
-            "$ko" "$image" "$config_file" "$symvers_file" "$vmlinux_file" > "$output/paths.txt"
-          printf 'UX module artifact collected from module_dir=%s\n' "$module_dir"
+          mkdir -p "$GITHUB_WORKSPACE/ux-kernel-materials"
+          tar --exclude=.git --exclude='*.o' --exclude='*.a' --exclude='*.ko' \
+            --exclude='*.cmd' --exclude='*.d' --exclude=__pycache__ \
+            -czf "$GITHUB_WORKSPACE/ux-kernel-materials/kernel-build-materials.tar.gz" \
+            common "$kernel_out"
+          printf 'Kernel build materials saved; compile ko and package KSU locally.\n'
 
       - name: 应用 KPM 补丁 (SukiSU/BakaSU)
         if: inputs.use_kpm && (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'BakaSU')
@@ -7150,14 +7121,14 @@ jobs:
             THIRD_PARTY_NOTICES.md
           compression-level: 9
 
-      - name: 上传 UX module 测试包
+      - name: 上传本地模块编译所需内核材料
         if: inputs.sailboat_ux_build_mode == 'module'
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-Sail_UX-module
-          path: ux-module-artifacts/
+          name: ${{ inputs.ksu_variant }}_kernel-${{ env.CONFIG }}-build-materials
+          path: ux-kernel-materials/kernel-build-materials.tar.gz
           if-no-files-found: error
-          compression-level: 9
+          compression-level: 0
 
       - name: 上传补丁冲突文件
         if: always() && env.REJ_COUNT > 0
