@@ -175,6 +175,14 @@ on:
         required: false
         type: string
         default: ""
+      sailboat_ux_build_mode:
+        description: "Sailboat UX 构建形态（builtin 或 module）"
+        required: false
+        type: choice
+        options:
+          - builtin
+          - module
+        default: builtin
 
 jobs:
   build-custom-kernel:
@@ -207,6 +215,7 @@ jobs:
       kpm_password: ${{ inputs.kpm_password || '' }}
       custom_external_modules: ${{ inputs.custom_external_modules || '' }}
       custom_kernel_options: ${{ inputs.custom_kernel_options || '' }}
+      sailboat_ux_build_mode: ${{ inputs.sailboat_ux_build_mode || 'builtin' }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
