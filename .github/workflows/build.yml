@@ -6931,7 +6931,12 @@ jobs:
           [ -n "$config_file" ] && [ -n "$symvers_file" ] && [ -n "$vmlinux_file" ] || {
             echo '::error::target config, Module.symvers or vmlinux missing'; exit 1;
           }
-          clang_bin="$(dirname "$(command -v clang)")"
+          clang_bin="$KERNEL_ROOT/prebuilts/clang/host/linux-x86/clang-r450784e/bin"
+          [ -x "$clang_bin/clang" ] && [ -x "$clang_bin/llvm-nm" ] || {
+            echo '::error::matching r450784e clang/llvm-nm not found'; exit 1;
+          }
+          echo "UX artifact toolchain: $clang_bin"
+          "$clang_bin/clang" --version
           proof="$RUNNER_TEMP/ux-target-proof"
           mkdir -p "$proof/out" "$proof/dist"
           ln -s "$config_file" "$proof/out/.config"
