@@ -157,13 +157,6 @@ on:
         type: string
         default: ""
 
-      # ==================== KPM 扩展选项 ====================
-      kpm_password:
-        description: "自定义 KPM 超级密码（留空=使用默认密码）"
-        required: false
-        type: string
-        default: ""
-
       # ==================== 自定义外部模块 ====================
       custom_external_modules:
         description: "自定义外部模块（兼容旧 repo;stage，也支持 module:repo;stage 与 set:repo#child;stage，用 | 分隔）"
